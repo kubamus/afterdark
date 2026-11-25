@@ -1,21 +1,42 @@
 /**
  * Shared, framework-agnostic runtime state.
  *
- * High-frequency values (scroll, audio levels, control positions) are plain mutable
- * fields read by the render loop every frame — no React re-renders involved.
- * Low-frequency UI state (sound on/off, deck transport) goes through a tiny
- * subscribe/emit store consumed with useSyncExternalStore.
+ * High-frequency values (scroll, audio levels, control positions, hardware micro-states)
+ * are plain mutable fields read by the render loop every frame — no React re-renders.
+ * Low-frequency UI state goes through a tiny subscribe/emit store for useSyncExternalStore.
  */
+
+export type ColorFxMode = "filter" | "sweep" | "dubecho";
 
 export interface DeckControls {
   /** deck 1 playing (the visitor's track) */
   playing: boolean;
   /** CUE held while paused (preview) */
   cueHeld: boolean;
-  /** Sound Color FX FILTER, −1 (low-pass) … 0 (off) … +1 (high-pass) */
+  /** Sound Color FX knob, −1 (LOW) … 0 (CENTER) … +1 (HI) */
   filter: number;
+  /** Active Sound Color FX mode on DJM-A9 */
+  colorFx: ColorFxMode;
+  /** DJM-A9 Center Lock switch (prevents overshooting 0 on fast sweeps) */
+  centerLock: boolean;
   /** channel 2 fader, 0 … 1 */
   fader: number;
+  /** MAGVEL crossfader, −1 (Deck 1 / A) … 0 (center) … +1 (Deck 2 / B) */
+  crossfader: number;
+  /** Beat FX momentary roll/echo build trigger */
+  beatFxHold: boolean;
+  /** Currently selected Beat FX name in Act IV */
+  activeBeatFx: string;
+  /** CDJ-3000X Jog Feel tension (0 = light, 1 = heavy) */
+  jogFeel: number;
+  /** Instantaneous jog angular nudge velocity (rad/s) */
+  jogVelocity: number;
+  /** Manual override for CDJ screen display in Act III (null = scroll-driven) */
+  screenMode: "play" | "browse" | null;
+  /** Momentary visual button press impulse for Act III 500k-press demo (0..1) */
+  demoPlayPulse: number;
+  /** Individual 8 Hot Cue pad trigger impulses (0..1 decaying) */
+  hotCuePulses: Float32Array;
 }
 
 export interface Frame {
@@ -24,6 +45,10 @@ export interface Frame {
   viewportH: number;
   /** 0..1 over the whole document */
   progress: number;
+  /** currently active shot id from cinematography sampler */
+  activeShot: string;
+  /** 0..1 progress within the current shot segment */
+  shotLocalT: number;
   /** analysed / simulated audio */
   levels: Float32Array; // ch1, ch2, ch3, ch4, masterL, masterR — 0..1 meter scale
   bass: number;
@@ -44,13 +69,30 @@ export const frame: Frame = {
   scrollY: 0,
   viewportH: 1,
   progress: 0,
+  activeShot: "hero",
+  shotLocalT: 0,
   levels: new Float32Array(6),
   bass: 0,
   energy: 0,
   kick: 0,
   beat: 0,
   release: 0,
-  controls: { playing: false, cueHeld: false, filter: -0.85, fader: 0 },
+  controls: {
+    playing: false,
+    cueHeld: false,
+    filter: -0.78,
+    colorFx: "filter",
+    centerLock: true,
+    fader: 0,
+    crossfader: 0,
+    beatFxHold: false,
+    activeBeatFx: "Mobius",
+    jogFeel: 0.45,
+    jogVelocity: 0,
+    screenMode: null,
+    demoPlayPulse: 0,
+    hotCuePulses: new Float32Array(8),
+  },
   pointerX: 0,
   pointerY: 0,
   canvasHidden: false,
@@ -62,9 +104,15 @@ export interface UIState {
   reducedMotion: boolean;
   playing: boolean;
   cueHeld: boolean;
+  colorFx: ColorFxMode;
+  centerLock: boolean;
+  beatFxHold: boolean;
   /** the visitor has released their track into the room */
   released: boolean;
   act: string;
+  activeShot: string;
+  /** Last triggered Hot Cue pad index (0..7) for subtle UI feedback */
+  lastHotCue: number | null;
 }
 
 type Listener = () => void;
@@ -99,6 +147,11 @@ export const ui = createStore<UIState>({
   reducedMotion: false,
   playing: false,
   cueHeld: false,
+  colorFx: "filter",
+  centerLock: true,
+  beatFxHold: false,
   released: false,
   act: "hero",
+  activeShot: "hero",
+  lastHotCue: null,
 });

@@ -55,12 +55,10 @@ export const CDJ = {
   cue: { at: [57, 874] as Px, r: 36 },
   browse: { at: [656, 262] as Px, r: 27 },
   tempo: { slot: { x0: 641, y0: 724, x1: 687, y1: 990 } as RectPx, capAt: [664, 859] as Px },
-  /** smaller knobs that rise above the panel */
+  /** rotary potentiometer knobs that rise above the CDJ panel */
   knobs: [
-    { id: "vinyl-speed", at: [664, 431], r: 15, h: 0.012 },
-    { id: "jog-feel", at: [550, 545], r: 14, h: 0.012 },
-    { id: "reloop", at: [152, 482], r: 15, h: 0.008 },
-    { id: "delete", at: [538, 482], r: 14, h: 0.008 },
+    { id: "vinyl-speed", at: [664, 431], r: 15, h: 0.013 },
+    { id: "jog-feel", at: [544, 544], r: 14, h: 0.013 },
   ] as KnobSpec[],
 } as const;
 

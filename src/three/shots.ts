@@ -2,10 +2,9 @@
  * Scroll-anchored cinematography.
  *
  * Every shot is a complete description of camera + lighting + scene state. Shots are
- * anchored to DOM markers ([data-shot="id"]); the director resolves each marker to a
- * scroll position and interpolates between neighbouring shots, so the camera rests
- * while copy is read and moves with purpose in between. Everything is a pure function
- * of scroll position — fully reversible and under the visitor's control.
+ * anchored to DOM markers ([data-shot="id"]). With dwell > 0, the camera holds cleanly
+ * on the active hardware feature while the visitor reads/interacts with it, then glides
+ * smoothly into the next shot — keeping background 3D visuals 100% synced to the section.
  */
 import { clamp, lerp, smootherstep } from "@/lib/math";
 
@@ -21,7 +20,7 @@ export interface Shot {
   key: number;
   /** back / edge lights */
   rim: number;
-  /** narrow raking spotlight (Act I) */
+  /** narrow raking spotlight (Act I + macro rim accents) */
   spot: number;
   /** environment reflections */
   env: number;
@@ -47,15 +46,15 @@ export const DEFAULT_SHOT: Shot = {
   pos: [0, 1.2, 1.2],
   target: [0, 0, 0],
   fov: 30,
-  exposure: 1,
-  key: 0.6,
-  rim: 0.5,
+  exposure: 1.06,
+  key: 0.65,
+  rim: 0.65,
   spot: 0,
-  env: 0.35,
+  env: 0.44,
   power: 1,
   led: 1,
   screen: 0,
-  venue: 0,
+  venue: 0.08,
   crowd: 0,
   signal: 0,
   demo: 0,
@@ -64,36 +63,45 @@ export const DEFAULT_SHOT: Shot = {
 
 // World reference points (metres). Table top is y = 0; DJ stands at +z.
 const CDJL: V3 = [-0.396, 0.09, 0.0];
-const SCREEN_L: V3 = [-0.396, 0.115, -0.18];
-const JOG_L: V3 = [-0.396, 0.1, 0.06];
-const PLAY_L: V3 = [-0.54, 0.093, 0.17];
+const SCREEN_L: V3 = [-0.45, 0.118, -0.175];
+const JOG_L: V3 = [-0.38, 0.105, 0.085];
+const PLAY_L: V3 = [-0.515, 0.095, 0.175];
 
 const s = (p: Partial<Shot>): Partial<Shot> => p;
 
 export const SHOTS: Record<string, Partial<Shot>> = {
-  hero: s({ pos: [0.78, 0.19, 0.66], target: [-0.34, 0.07, -0.02], fov: 28, exposure: 1.05, key: 0.0, rim: 0.65, spot: 1, env: 0.18, power: 0.12, led: 0.85, fit: 0.35 }),
-  rise: s({ pos: [0.32, 0.92, 1.12], target: [-0.06, 0.02, -0.02], fov: 30, key: 0.45, rim: 0.7, spot: 0.4, env: 0.3, power: 0.45, led: 1, fit: 0.9 }),
-  overhead: s({ pos: [0.0, 1.95, 0.16], target: [0, 0, 0.0], fov: 31, key: 1, rim: 0.35, spot: 0, env: 0.35, power: 1, led: 1, fit: 1 }),
-  beauty: s({ pos: [1.2, 0.5, 1.02], target: [-0.08, 0.03, -0.03], fov: 25, key: 0.75, rim: 1, env: 0.45, fit: 0.85 }),
-  "cdj-intro": s({ pos: [-0.95, 0.52, 0.66], target: [-0.36, 0.05, 0.0], fov: 29, key: 0.8, rim: 0.9, fit: 0.7 }),
-  "cdj-screen": s({ pos: [-0.36, 0.44, 0.16], target: SCREEN_L, fov: 30, key: 0.55, rim: 0.6, screen: 1, fit: 0.5 }),
-  "cdj-jog": s({ pos: [-0.1, 0.17, 0.44], target: JOG_L, fov: 30, key: 0.8, rim: 1.1, spot: 0.5, env: 0.5, fit: 0.45 }),
-  "cdj-playcue": s({ pos: [-0.36, 0.22, 0.4], target: PLAY_L, fov: 26, key: 0.55, rim: 0.8, spot: 0.6, fit: 0.35 }),
-  "cdj-library": s({ pos: [-0.13, 0.25, -0.02], target: [-0.42, 0.12, -0.19], fov: 30, key: 0.45, rim: 0.7, screen: 1, fit: 0.45 }),
-  "cdj-front": s({ pos: [-0.27, 0.115, 0.82], target: [-0.396, 0.07, 0.2], fov: 24, key: 0.5, rim: 0.9, spot: 0.4, fit: 0.5 }),
-  "cdj-sound": s({ pos: [-1.05, 0.95, 1.3], target: CDJL, fov: 28, key: 0.12, rim: 0.35, env: 0.15, power: 0.5, led: 0.7, fit: 0.8 }),
-  signal: s({ pos: [-0.28, 0.82, -1.08], target: [-0.18, 0.05, -0.16], fov: 32, key: 0.25, rim: 0.4, env: 0.2, power: 0.6, signal: 1, demo: 0.35, fit: 0.8 }),
-  "djm-intro": s({ pos: [0.0, 1.02, 0.26], target: [0, 0.0, 0.0], fov: 30, key: 0.95, rim: 0.5, demo: 0.6, fit: 0.9 }),
-  "djm-channels": s({ pos: [-0.03, 0.4, 0.27], target: [0.0, 0.09, -0.07], fov: 33, key: 0.75, rim: 0.7, demo: 1, fit: 0.55 }),
-  "djm-ess": s({ pos: [0.52, 0.42, 0.78], target: [0.0, 0.06, 0.0], fov: 28, key: 0.25, rim: 0.6, env: 0.25, demo: 0.6, fit: 0.7 }),
-  "djm-color": s({ pos: [-0.05, 0.29, 0.2], target: [-0.03, 0.1, -0.02], fov: 30, key: 0.7, rim: 0.8, demo: 0.8, fit: 0.45 }),
-  "djm-beatfx": s({ pos: [0.3, 0.33, 0.14], target: [0.16, 0.09, -0.1], fov: 30, key: 0.55, rim: 0.7, demo: 0.8, fit: 0.45 }),
-  "djm-fader": s({ pos: [0.13, 0.16, 0.48], target: [-0.01, 0.095, 0.15], fov: 28, key: 0.6, rim: 1, spot: 0.4, demo: 0.6, fit: 0.4 }),
-  "djm-phones": s({ pos: [0.0, 0.74, 0.8], target: [0, 0.04, 0.05], fov: 34, key: 0.8, rim: 0.8, demo: 0.7, fit: 0.85 }),
-  control: s({ pos: [-0.16, 0.74, 0.64], target: [-0.2, 0.03, 0.02], fov: 38, key: 0.7, rim: 0.8, env: 0.35, demo: 0, fit: 0.9 }),
-  pov: s({ pos: [0.0, 0.52, 0.86], target: [0, 0.36, -3], fov: 52, exposure: 1.05, key: 0.2, rim: 0.6, venue: 1, crowd: 1, demo: 1, fit: 0.6 }),
+  // Dramatic hero chiaroscuro raking over the sculpted concave-dimpled jog & glowing PLAY/CUE rings
+  hero: s({ pos: [0.68, 0.24, 0.66], target: [-0.34, 0.082, 0.02], fov: 27, exposure: 1.1, key: 0.14, rim: 0.92, spot: 1.12, env: 0.34, power: 0.18, led: 0.96, venue: 0.14, fit: 0.38 }),
+  rise: s({ pos: [0.34, 0.88, 1.08], target: [-0.04, 0.025, -0.02], fov: 30, key: 0.58, rim: 0.88, spot: 0.48, env: 0.42, power: 0.56, led: 1, venue: 0.16, fit: 0.9 }),
+  overhead: s({ pos: [0.0, 1.92, 0.16], target: [0, 0, 0.0], fov: 31, key: 1.0, rim: 0.54, spot: 0, env: 0.48, power: 1, led: 1, venue: 0.08, fit: 1 }),
+  beauty: s({ pos: [1.14, 0.46, 0.98], target: [-0.08, 0.04, -0.01], fov: 25, key: 0.84, rim: 1.18, env: 0.56, venue: 0.18, fit: 0.85 }),
+  "cdj-intro": s({ pos: [-0.88, 0.47, 0.62], target: [-0.36, 0.06, 0.02], fov: 28, key: 0.84, rim: 1.08, spot: 0.35, env: 0.52, venue: 0.14, fit: 0.7 }),
+  // Tight macro on the tilted 10.1" screen + sculpted bezel buttons & Hot Cues
+  "cdj-screen": s({ pos: [-0.34, 0.39, 0.18], target: SCREEN_L, fov: 27, key: 0.58, rim: 0.82, env: 0.48, screen: 1, venue: 0.06, fit: 0.5 }),
+  // Dramatic low raking macro directly on the sculpted concave-dimpled Jog Wheel & chrome bevel
+  "cdj-jog": s({ pos: [-0.08, 0.195, 0.43], target: JOG_L, fov: 23, key: 0.72, rim: 1.32, spot: 1.05, env: 0.66, venue: 0.12, fit: 0.42 }),
+  // Tight macro framing the sculpted green PLAY, amber CUE, Search & IN/OUT halos on the lower-left deck
+  "cdj-playcue": s({ pos: [-0.3, 0.22, 0.41], target: PLAY_L, fov: 23, key: 0.56, rim: 1.04, spot: 0.92, env: 0.54, venue: 0.08, fit: 0.35 }),
+  // Front-panel NFC touchpoint & USB-C / cloud connectivity macro
+  "cdj-front": s({ pos: [-0.24, 0.14, 0.7], target: [-0.4, 0.068, 0.19], fov: 23, key: 0.62, rim: 1.12, spot: 0.62, env: 0.52, screen: 1, venue: 0.1, fit: 0.48 }),
+  "cdj-sound": s({ pos: [-1.05, 0.95, 1.3], target: CDJL, fov: 28, key: 0.16, rim: 0.42, env: 0.18, power: 0.5, led: 0.75, venue: 0.08, fit: 0.8 }),
+  // Signature rear-booth audio signal bridge (CDJ-3000X -> DJM-A9 Ch 2)
+  signal: s({ pos: [-0.26, 0.76, -1.04], target: [-0.18, 0.05, -0.18], fov: 31, key: 0.28, rim: 0.62, env: 0.3, power: 0.72, signal: 1, demo: 0.55, venue: 0.18, fit: 0.8 }),
+  "djm-intro": s({ pos: [0.0, 0.96, 0.28], target: [0, 0.0, 0.0], fov: 30, key: 0.96, rim: 0.68, env: 0.52, demo: 0.75, venue: 0.14, fit: 0.9 }),
+  "djm-channels": s({ pos: [-0.04, 0.38, 0.25], target: [0.0, 0.095, -0.065], fov: 30, key: 0.84, rim: 0.92, env: 0.54, demo: 1, venue: 0.12, fit: 0.55 }),
+  "djm-ess": s({ pos: [0.54, 0.42, 0.76], target: [0.0, 0.06, 0.0], fov: 27, key: 0.34, rim: 0.82, env: 0.36, demo: 0.65, venue: 0.1, fit: 0.7 }),
+  // Tight macro on DJM-A9 Sound Color FX knobs & CENTER LOCK
+  "djm-color": s({ pos: [-0.06, 0.265, 0.2], target: [-0.035, 0.105, -0.015], fov: 26, key: 0.76, rim: 1.05, spot: 0.58, env: 0.58, demo: 0.85, venue: 0.1, fit: 0.45 }),
+  // Tight macro on Beat FX colour display, X-PAD & blue ON/OFF dome
+  "djm-beatfx": s({ pos: [0.31, 0.32, 0.16], target: [0.155, 0.095, -0.06], fov: 28, key: 0.62, rim: 0.9, env: 0.52, demo: 0.9, venue: 0.14, fit: 0.45 }),
+  // Low raking macro directly on the 3rd-gen MAGVEL FADER & upgraded channel faders
+  "djm-fader": s({ pos: [0.14, 0.165, 0.44], target: [-0.01, 0.095, 0.155], fov: 25, key: 0.7, rim: 1.2, spot: 0.68, env: 0.6, demo: 0.75, venue: 0.12, fit: 0.4 }),
+  "djm-phones": s({ pos: [0.0, 0.72, 0.78], target: [0, 0.045, 0.05], fov: 33, key: 0.82, rim: 0.92, env: 0.5, demo: 0.75, venue: 0.12, fit: 0.85 }),
+  // Act V Take Control: clean performance framing over Left CDJ-3000X + DJM-A9 Ch 2/3
+  control: s({ pos: [-0.15, 0.68, 0.66], target: [-0.18, 0.04, -0.02], fov: 36, key: 0.74, rim: 0.96, env: 0.48, demo: 0, venue: 0.26, crowd: 0.16, fit: 0.88 }),
+  pov: s({ pos: [0.0, 0.52, 0.86], target: [0, 0.36, -3], fov: 52, exposure: 1.1, key: 0.24, rim: 0.74, venue: 1, crowd: 1, demo: 1, fit: 0.6 }),
   still: s({ pos: [0.0, 0.5, 0.9], target: [0, 0.3, -3], fov: 50, exposure: 0.0, key: 0, rim: 0, spot: 0, env: 0, power: 0, led: 0, venue: 0, crowd: 0, demo: 0, fit: 0.6 }),
-  final: s({ pos: [0.92, 0.66, 1.26], target: [-0.02, 0.01, -0.03], fov: 27, exposure: 1.05, key: 0.95, rim: 1.1, env: 0.45, power: 1, led: 1, venue: 0.15, crowd: 0, demo: 0.5, fit: 0.95 }),
+  final: s({ pos: [0.92, 0.62, 1.22], target: [-0.02, 0.02, -0.02], fov: 27, exposure: 1.1, key: 0.98, rim: 1.24, env: 0.56, power: 1, led: 1, venue: 0.24, crowd: 0, demo: 0.6, fit: 0.95 }),
 };
 
 export function resolveShot(id: string): Shot {
@@ -122,31 +130,40 @@ export function cloneShot(s: Shot): Shot {
 
 /**
  * Samples the choreography at scroll position y. Anchors must be sorted by y.
- * Returns the interpolated shot and the index of the segment.
+ * When dwell > 0 (e.g. 0.54), the shot holds cleanly on anchor[i] for the first
+ * portion of the section so the 3D subject stays locked while reading/interacting,
+ * then transitions smoothly in the remaining travel toward anchor[i + 1].
  */
-export function sampleShots(anchors: Anchor[], y: number, out: Shot): { segment: number; t: number } {
+export function sampleShots(
+  anchors: Anchor[],
+  y: number,
+  out: Shot,
+  dwell = 0,
+): { segment: number; t: number; activeId: string } {
   if (anchors.length === 0) {
     Object.assign(out, cloneShot(DEFAULT_SHOT));
-    return { segment: 0, t: 0 };
+    return { segment: 0, t: 0, activeId: "hero" };
   }
   const first = anchors[0]!;
   const last = anchors[anchors.length - 1]!;
   if (y <= first.y) {
     mixShots(resolveShot(first.id), resolveShot(first.id), 0, out);
-    return { segment: 0, t: 0 };
+    return { segment: 0, t: 0, activeId: first.id };
   }
   if (y >= last.y) {
     mixShots(resolveShot(last.id), resolveShot(last.id), 0, out);
-    return { segment: anchors.length - 1, t: 1 };
+    return { segment: anchors.length - 1, t: 1, activeId: last.id };
   }
   let i = 0;
   while (i < anchors.length - 1 && anchors[i + 1]!.y < y) i++;
   const a = anchors[i]!;
   const b = anchors[i + 1]!;
   const raw = clamp((y - a.y) / Math.max(1, b.y - a.y));
-  const t = smootherstep(raw);
+  const clampedDwell = clamp(dwell, 0, 0.85);
+  const remapped = clampedDwell > 0 ? clamp((raw - clampedDwell) / (1 - clampedDwell)) : raw;
+  const t = smootherstep(remapped);
   mixShots(resolveShot(a.id), resolveShot(b.id), t, out);
-  return { segment: i, t: raw };
+  return { segment: i, t: raw, activeId: remapped > 0.65 ? b.id : a.id };
 }
 
 /**
