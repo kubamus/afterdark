@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("AFTER DARK campaign", () => {
-  test("renders hero, WebGL stage, navigation, specs, and interactive Take Control without errors", async ({ page }) => {
+  test("renders hero, WebGL stage, Liquid Glass navigation, hardware controls, and specs without errors", async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") errors.push(msg.text());
@@ -12,40 +12,39 @@ test.describe("AFTER DARK campaign", () => {
     await page.goto("/", { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
 
-    await expect(page.getByRole("heading", { level: 1, name: "The night is yours." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Built for the club booth." })).toBeVisible();
     await expect(page.locator("canvas.stage-canvas")).toBeVisible();
 
-    // Sound starts opt-in (off) and toggles on click
-    const soundBtn = page.getByRole("button", { name: /Sound off/i });
-    await expect(soundBtn).toHaveAttribute("aria-pressed", "false");
-    await soundBtn.click();
-    await expect(page.getByRole("button", { name: /Sound on/i })).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: /Sound on/i }).click();
+    // Verify removed audio & fake Take Control elements are gone
+    await expect(page.getByRole("button", { name: /Sound off/i })).toHaveCount(0);
+    await expect(page.locator("#take-control")).toHaveCount(0);
 
     // Hardware inspect mode toggle on CDJ-3000X
-    const jogInspect = page.getByRole("button", { name: "Jog Wheel" });
+    const jogInspect = page.getByRole("button", { name: "Jog wheel" });
+    await jogInspect.scrollIntoViewIfNeeded();
     await jogInspect.click();
     await expect(jogInspect).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Release" }).first().click();
 
-    // Act V Take Control: keyboard & pointer controls
-    const playBtn = page.getByRole("button", { name: "Play Deck 1" });
-    await playBtn.scrollIntoViewIfNeeded();
-    await playBtn.click();
-    await expect(page.getByRole("button", { name: "Pause Deck 1" })).toHaveAttribute("aria-pressed", "true");
+    // Live 3D screen toggle on CDJ-3000X
+    const waveformBtn = page.getByRole("button", { name: "Waveform view" });
+    await waveformBtn.scrollIntoViewIfNeeded();
+    await waveformBtn.click();
+    await expect(waveformBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Keyboard fader slider
-    const fader = page.getByRole("slider", { name: "Channel 2 volume fader" });
-    await fader.focus();
-    await page.keyboard.press("ArrowRight");
-    const valAfter = Number(await fader.getAttribute("aria-valuenow"));
-    expect(valAfter).toBeGreaterThan(0);
+    // Authentic hold-to-play CUE behavior
+    const cueBtn = page.getByRole("button", { name: "Hold CUE" });
+    await cueBtn.scrollIntoViewIfNeeded();
+    await cueBtn.dispatchEvent("pointerdown", { pointerId: 1, isPrimary: true });
+    await expect(page.getByRole("button", { name: "Playing CUE" })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Playing CUE" }).dispatchEvent("pointerup", { pointerId: 1, isPrimary: true });
+    await expect(page.getByRole("button", { name: "Hold CUE" })).toHaveAttribute("aria-pressed", "false");
 
-    // Sound Color FX mode switch + Center Lock + Choreographed Drop on beat
-    await page.getByRole("button", { name: "DUB ECHO" }).click();
-    await expect(page.getByRole("button", { name: "DUB ECHO" })).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Drop on beat" }).click();
-    await expect(page.getByRole("status")).toContainText(/Both decks live/i, { timeout: 6000 });
+    // Live Beat FX OLED selector on DJM-A9
+    const echoFx = page.getByRole("option", { name: "Echo" });
+    await echoFx.scrollIntoViewIfNeeded();
+    await echoFx.click();
+    await expect(echoFx).toHaveAttribute("aria-selected", "true");
 
     // Official product links & specs accessible outside WebGL
     await expect(page.getByRole("link", { name: /Explore CDJ-3000X/i })).toHaveAttribute(
@@ -71,7 +70,7 @@ test.describe("AFTER DARK campaign", () => {
     await page.goto("/", { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
 
-    await expect(page.getByRole("heading", { level: 1, name: "The night is yours." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Built for the club booth." })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflow).toBe(false);
 

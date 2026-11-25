@@ -110,12 +110,12 @@ export const DJM = {
     { id: "booth-level", at: [781, 570], r: 19, h: 0.016 },
     { id: "phonesB-mix", at: [781, 790], r: 17, h: 0.015 },
     { id: "phonesB-level", at: [781, 850], r: 17, h: 0.015 },
-    // multi I/O + beat fx
-    { id: "send-ch", at: [875, 90], r: 16, h: 0.014 },
-    { id: "send-level", at: [875, 168], r: 21, h: 0.017 },
-    { id: "fx-select", at: [945, 650], r: 21, h: 0.017 },
-    { id: "fx-time", at: [945, 845], r: 20, h: 0.016 },
-    { id: "fx-depth", at: [945, 933], r: 21, h: 0.017 },
+    // multi I/O + beat fx (exact crop-px centers measured directly on djm-top.webp)
+    { id: "send-ch", at: [876, 84], r: 16, h: 0.014 },
+    { id: "send-level", at: [876, 171], r: 21, h: 0.017 },
+    { id: "fx-select", at: [946, 650], r: 21, h: 0.017 },
+    { id: "fx-time", at: [946, 845], r: 21, h: 0.016 },
+    { id: "fx-depth", at: [946, 935], r: 21, h: 0.017 },
   ] as KnobSpec[],
   /** Sound Color FX knobs (one per channel) — larger caps */
   color: CH_X.map((x, i) => ({ id: `ch${i + 1}-color`, at: [x, 540] as Px, r: 29, h: 0.02 })),
@@ -137,8 +137,8 @@ export const DJM = {
     { x0: 750, y0: 155, x1: 760, y1: 415 },
     { x0: 804, y0: 155, x1: 814, y1: 415 },
   ] as RectPx[],
-  beatFxDisplay: { x0: 857, y0: 220, x1: 1033, y1: 375 } as RectPx,
-  xpad: { x0: 860, y0: 390, x1: 1033, y1: 435 } as RectPx,
+  beatFxDisplay: { x0: 854, y0: 221, x1: 1038, y1: 373 } as RectPx,
+  xpad: { x0: 860, y0: 397, x1: 1032, y1: 428 } as RectPx,
   antenna: { at: [64, 0] as Px, h: 0.05, r: 0.0042 },
 } as const;
 

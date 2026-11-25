@@ -26,12 +26,13 @@ const plexMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "AFTER DARK — CDJ-3000X / DJM-A9",
+  title: "After Dark, CDJ-3000X and DJM-A9",
   description:
-    "The night is yours. AlphaTheta CDJ-3000X and Pioneer DJ DJM-A9 — professional instruments for the moments that matter.",
+    "Interactive 3D club booth with two AlphaTheta CDJ-3000X media players and one Pioneer DJ DJM-A9 4-channel mixer.",
   openGraph: {
-    title: "AFTER DARK — CDJ-3000X / DJM-A9",
-    description: "The night is yours. Professional instruments for the moments that matter.",
+    title: "After Dark, CDJ-3000X and DJM-A9",
+    description:
+      "Interactive 3D club booth with two AlphaTheta CDJ-3000X media players and one Pioneer DJ DJM-A9 4-channel mixer.",
     type: "website",
   },
 };

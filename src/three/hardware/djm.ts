@@ -29,12 +29,24 @@ export interface DjmRig {
   panel: PanelUniforms;
   /** Sound Color FX knobs (index 0..3 for ch1..ch4) */
   colorKnobs: THREE.Group[];
+  /** Physical 3D CENTER LOCK slide switch nub (moves left/right when toggled!) */
+  centerLockSwitch: { set(locked: boolean): void };
   /** Movable channel faders (index 0..3 for ch1..ch4) */
   faders: { mesh: THREE.Object3D; zMin: number; zMax: number; set(v: number): void }[];
   /** Movable 3rd-gen MAGVEL FADER crossfader */
   crossfader: { mesh: THREE.Object3D; xMin: number; xMax: number; set(v: number): void };
   /** Glowing Beat FX ON/OFF dome light */
   beatFxDomeMat: THREE.MeshPhysicalMaterial;
+  /** Dynamic 3D Beat FX OLED display updater + live X-PAD glow strip */
+  updateBeatFxScreen(opts: {
+    fxName: string;
+    division: string;
+    xpadPos: number;
+    freqMask: { low: boolean; mid: boolean; hi: boolean };
+    active: boolean;
+    power: number;
+    time: number;
+  }): void;
   /** Interactive hit targets for raycasting */
   hitTargets: { ch2Fader: THREE.Object3D; ch2Filter: THREE.Object3D; crossfader: THREE.Object3D; beatFxDome: THREE.Mesh };
   /** Device-local anchors in metres */
@@ -215,23 +227,23 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
   group.add(physicalKnobs);
 
   // =========================================================================
-  // SCULPTED 12-FLUTE SOUND COLOR FX KNOBS (NO baked flat top photo glare!)
+  // SCULPTED 14-FLUTE SOUND COLOR FX KNOBS (Authentic brushed gunmetal + silver collar!)
   // =========================================================================
   const colorKnobs: THREE.Group[] = [];
   const colorBarrelMat = new THREE.MeshPhysicalMaterial({
-    color: 0x222229,
-    roughness: 0.28,
-    metalness: 0.78,
-    clearcoat: 0.25,
-    clearcoatRoughness: 0.22,
+    color: 0x2c303a,
+    roughness: 0.34,
+    metalness: 0.74,
+    clearcoat: 0.28,
+    clearcoatRoughness: 0.24,
     normalMap: shared.maps.rubberNormal,
-    normalScale: new THREE.Vector2(0.14, 0.14),
+    normalScale: new THREE.Vector2(0.18, 0.18),
   });
   const colorCrownMat = new THREE.MeshPhysicalMaterial({
-    color: 0x353740,
-    roughness: 0.32,
-    metalness: 0.88,
-    clearcoat: 0.3,
+    color: 0x3b3f4b,
+    roughness: 0.3,
+    metalness: 0.86,
+    clearcoat: 0.34,
     clearcoatRoughness: 0.18,
     normalMap: shared.maps.radialNormal,
     normalScale: new THREE.Vector2(0.32, 0.32),
@@ -271,50 +283,41 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     pivot.rotation.y = initialColorAngles[i] ?? 0;
     pivot.name = ck.id;
 
-    // 12-flute deeply scalloped metallic grip barrel (matches real djm-color.webp!)
-    const barrelGeo = createFlutedKnobBarrelGeo(r * 0.86, r * 1.04, h, 12, 0.075, 72);
+    // High-detail 14-flute brushed-gunmetal Sound Color FX grip barrel
+    const barrelGeo = createFlutedKnobBarrelGeo(r * 0.8, r * 0.96, h, 14, 0.072, 84);
     const barrel = new THREE.Mesh(barrelGeo, colorBarrelMat);
     barrel.position.y = h / 2;
     barrel.castShadow = true;
     barrel.receiveShadow = true;
     pivot.add(barrel);
 
-    // Bright machined silver base skirt collar
-    const baseRingGeo = new THREE.TorusGeometry(r * 1.02, 0.0011, 12, 48);
-    baseRingGeo.rotateX(Math.PI / 2);
+    // Flared brushed-aluminum base skirt collar
+    const baseRingGeo = new THREE.CylinderGeometry(r * 0.96, r * 1.09, h * 0.15, 56);
     const baseRing = new THREE.Mesh(baseRingGeo, shared.silver);
-    baseRing.position.y = 0.0013;
+    baseRing.position.y = h * 0.075;
     pivot.add(baseRing);
 
-    // Machined brushed-chrome crown chamfer
-    const crownRingGeo = new THREE.TorusGeometry(r * 0.85, 0.0009, 12, 48);
-    crownRingGeo.rotateX(Math.PI / 2);
-    const crownRing = new THREE.Mesh(crownRingGeo, shared.silver);
-    crownRing.position.y = h - 0.0004;
-    pivot.add(crownRing);
-
-    // Real spun-metal radial crown disc (zero static photo reflection!)
-    const crownCapGeo = new THREE.CircleGeometry(r * 0.83, 48);
-    crownCapGeo.rotateX(-Math.PI / 2);
+    // Flush spun-metal radial crown disc
+    const crownCapGeo = new THREE.CylinderGeometry(r * 0.69, r * 0.76, 0.0009, 56);
     const crownCap = new THREE.Mesh(crownCapGeo, colorCrownMat);
-    crownCap.position.y = h + 0.0002;
+    crownCap.position.y = h * 0.985;
     pivot.add(crownCap);
 
-    // Single crisp 3D molded white indicator blade (top + front bevel!)
-    const topFinGeo = new THREE.BoxGeometry(0.0023, 0.0018, r * 0.78);
+    // Sleek flush-inlaid rounded white indicator line
+    const topFinGeo = new RoundedBoxGeometry(0.0015, 0.00075, r * 0.65, 2, 0.0003);
     const topFin = new THREE.Mesh(topFinGeo, pointerMat);
-    topFin.position.set(0, h + 0.001, -r * 0.42);
+    topFin.position.set(0, h * 1.001, -r * 0.36);
     pivot.add(topFin);
 
-    const frontFinGeo = new THREE.BoxGeometry(0.0023, h * 0.56, 0.0016);
+    const frontFinGeo = new RoundedBoxGeometry(0.0015, h * 0.42, 0.0009, 2, 0.0003);
     const frontFin = new THREE.Mesh(frontFinGeo, pointerMat);
-    frontFin.position.set(0, h * 0.72, -r * 0.86);
-    frontFin.rotation.x = -0.15;
+    frontFin.position.set(0, h * 0.72, -r * 0.77);
+    frontFin.rotation.x = -0.2;
     pivot.add(frontFin);
 
     group.add(pivot);
     colorKnobs.push(pivot);
-    disposables.push(barrelGeo, baseRingGeo, crownRingGeo, crownCapGeo, topFinGeo, frontFinGeo);
+    disposables.push(barrelGeo, baseRingGeo, crownCapGeo, topFinGeo, frontFinGeo);
   }
 
   // =========================================================================
@@ -351,55 +354,55 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     faceGeos.push(face);
   };
 
-  // 1) Exact pixel-measured 6 Sound Color FX frosted translucent keycaps (djm_0 & djm_2)
-  for (const px of [162, 219]) {
-    for (const py of [526, 582, 638]) {
-      pushRect(px, py, 46, 30, 0.0054, whiteAcrylicGeos);
+  // 1) Exact 0.0px pixel-measured 6 Sound Color FX frosted translucent keycaps (djm-scfx-6.png!)
+  for (const px of [166.5, 221.5]) {
+    for (const py of [518, 572, 627]) {
+      pushRect(px, py, 37, 26, 0.0054, whiteAcrylicGeos);
     }
   }
 
-  // 2) 10 Translucent Amber CUE A/B pads (Channels 1–4 + Master A/B at cropY=645!)
+  // 2) Exact 0.0px pixel-measured 10 Translucent Amber CUE A/B pads (djm-cue-row.png!)
   for (const cx of dev.channelX) {
-    pushRect(cx - 27, 645, 42, 26, 0.0058, amberBodyGeos);
-    pushRect(cx + 27, 645, 34, 26, 0.0058, amberBodyGeos);
+    pushRect(cx - 20, 640.5, 46, 29, 0.0058, amberBodyGeos);
+    pushRect(cx + 29, 640.5, 32, 29, 0.0058, amberBodyGeos);
   }
-  pushRect(745, 645, 42, 26, 0.0058, amberBodyGeos); // Master CUE A
-  pushRect(800, 645, 34, 26, 0.0058, amberBodyGeos); // Master CUE B
+  pushRect(758, 640.5, 46, 29, 0.0058, amberBodyGeos); // Master CUE A
+  pushRect(807, 640.5, 32, 29, 0.0058, amberBodyGeos); // Master CUE B
 
   // 3) 5 Glowing Blue BEAT FX assign LED indicator pills beneath each CUE row
-  for (const cx of [...dev.channelX, 772]) {
-    pushRect(cx - 24, 688, 16, 9, 0.003, blueAcrylicGeos);
+  for (const cx of [...dev.channelX, 778]) {
+    pushRect(cx - 22, 681, 16, 9, 0.003, blueAcrylicGeos);
   }
 
-  // 4) Left Mic / Phantom / Bluetooth / MIDI / Headphones A controls (exact djm_0 & djm_2 coords)
-  pushRect(190, 196, 44, 26, 0.005, redAcrylicGeos); // +48V Phantom
-  pushRect(190, 268, 44, 24, 0.0046, darkBodyGeos); // Bluetooth Pairing
-  pushRect(190, 335, 44, 24, 0.0046, darkBodyGeos); // MIDI ON/OFF
-  pushRect(190, 388, 44, 24, 0.0046, darkBodyGeos); // MIDI START/STOP
-  pushRound(55, 456, 13, 0.005); // TALKOVER
-  pushRect(55, 526, 44, 26, 0.0052, blueAcrylicGeos); // MIC FX ECHO
-  pushRect(55, 582, 44, 26, 0.0052, blueAcrylicGeos); // MIC FX PITCH
-  pushRect(55, 638, 44, 26, 0.0052, blueAcrylicGeos); // MIC FX MEGAPHONE
-  pushRect(55, 795, 44, 26, 0.0052, blueAcrylicGeos); // MIC REVERB ON
-  pushRound(55, 1018, 22, 0.0062); // MIC PUSH TO TALK ON
-  pushRect(162, 795, 38, 24, 0.0048, darkBodyGeos); // PHONES A LINK CUE
-  pushRect(219, 795, 38, 24, 0.0048, darkBodyGeos); // PHONES A MONO SPLIT
-  pushRect(745, 795, 38, 24, 0.0048, darkBodyGeos); // PHONES B LINK CUE
-  pushRect(800, 795, 38, 24, 0.0048, darkBodyGeos); // PHONES B MONO SPLIT
+  // 4) Left Mic / Phantom / Bluetooth / MIDI / Headphones A & B controls (EXACT crop-px centers on djm-top.webp!)
+  pushRect(192, 186, 40, 24, 0.005, redAcrylicGeos); // +48V Phantom
+  pushRect(192, 256, 40, 24, 0.0046, darkBodyGeos); // Bluetooth Pairing
+  pushRect(192, 325, 40, 24, 0.0046, darkBodyGeos); // MIDI ON/OFF
+  pushRect(192, 381, 40, 24, 0.0046, darkBodyGeos); // MIDI START/STOP
+  pushRound(68, 456, 12, 0.005); // TALKOVER
+  pushRect(68, 521, 38, 22, 0.0052, blueAcrylicGeos); // MIC FX ECHO
+  pushRect(68, 576, 38, 22, 0.0052, blueAcrylicGeos); // MIC FX PITCH
+  pushRect(68, 630, 38, 22, 0.0052, blueAcrylicGeos); // MIC FX MEGAPHONE
+  pushRect(68, 787, 38, 22, 0.0052, blueAcrylicGeos); // MIC REVERB ON
+  pushRound(68, 1004, 18, 0.006); // MIC PUSH TO TALK ON
+  pushRect(163, 787, 38, 24, 0.0048, darkBodyGeos); // PHONES A LINK CUE
+  pushRect(221, 787, 38, 24, 0.0048, darkBodyGeos); // PHONES A MONO SPLIT
+  pushRect(751, 739, 32, 24, 0.0048, darkBodyGeos); // PHONES B LINK CUE
+  pushRect(811, 739, 32, 24, 0.0048, darkBodyGeos); // PHONES B MONO SPLIT
 
-  // 5) Right Beat FX & Multi I/O controls (djm_1 & djm_3)
-  pushRound(935, 175, 18, 0.0058); // INSERT
-  pushRect(875, 475, 44, 24, 0.0052, darkBodyGeos); // BEAT <
-  pushRect(985, 475, 44, 24, 0.0052, darkBodyGeos); // BEAT >
-  pushRound(875, 528, 13, 0.0052); // AUTO/TAP
-  pushRound(935, 528, 22, 0.0066); // TAP (large green-ringed button!)
-  pushRound(995, 528, 13, 0.0052); // QUANTIZE
-  for (const fxX of [875, 935, 995]) {
-    pushRect(fxX, 582, 42, 24, 0.0054, blueAcrylicGeos); // FX FREQUENCY LOW / MID / HI
+  // 5) Right Beat FX & Multi I/O controls (EXACT crop-px centers measured directly on djm-top.webp!)
+  pushRound(946, 171, 18, 0.0058); // INSERT blue button
+  pushRect(901, 469, 42, 20, 0.0052, darkBodyGeos); // BEAT <
+  pushRect(991, 469, 42, 20, 0.0052, darkBodyGeos); // BEAT >
+  pushRound(895, 521, 11, 0.0052); // AUTO/TAP
+  pushRound(946, 521, 18, 0.0064); // TAP (green-ringed button)
+  pushRound(996, 521, 11, 0.0052); // QUANTIZE / UTILITY
+  for (const fxX of [895, 946, 997]) {
+    pushRect(fxX, 582, 38, 24, 0.0054, blueAcrylicGeos); // FX FREQUENCY LOW / MID / HI
   }
-  for (const chX of [858, 910, 962, 1014]) {
-    pushRect(chX, 732, 34, 21, 0.0052, blueAcrylicGeos); // CH SELECT 1 2 3 4
-    pushRect(chX, 780, 34, 21, 0.0052, blueAcrylicGeos); // CH SELECT MIC CF.A CF.B MST
+  for (const chX of [884, 926, 968, 1010]) {
+    pushRect(chX, 725, 32, 18, 0.0052, blueAcrylicGeos); // CH SELECT 1 2 3 4
+    pushRect(chX, 775, 32, 18, 0.0052, blueAcrylicGeos); // CH SELECT MIC CF.A CF.B MST
   }
 
   // Solid materials for separated keycap walls (translucent acrylics glow subtly from inside!)
@@ -483,8 +486,8 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     group.add(mesh);
     disposables.push(g, m);
   };
-  addHaloRing(935, 528, 22, 0x38c962); // TAP
-  addHaloRing(55, 1018, 22, 0x3b82f6); // MIC ON
+  addHaloRing(946, 521, 18, 0x38c962); // TAP (exact cropX=946, cropY=521!)
+  addHaloRing(68, 1004, 18, 0x3b82f6); // MIC ON (exact cropX=68, cropY=1004!)
 
   // =========================================================================
   // PHYSICAL 3D SLIDE SWITCHES (CENTER LOCK, 4× A/THRU/B, 3× CURVE SWITCHES)
@@ -507,9 +510,17 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     nub.castShadow = true;
     group.add(nub);
     disposables.push(wellGeo, nubGeo);
+    return { nub, baseX: sx, baseZ: sz };
   };
 
-  buildSlideSwitch(190, 472, true, 6); // CENTER LOCK ON
+  const clSwitch = buildSlideSwitch(192, 466, true, 6); // CENTER LOCK ON/OFF
+  const centerLockSwitch = {
+    set(locked: boolean) {
+      const offM = (locked ? 6 : -6) / dev.pxPerM;
+      clSwitch.nub.position.x = clSwitch.baseX + offM;
+    },
+  };
+  buildSlideSwitch(946, 90, false, -4); // MULTI I/O INSERT SOURCE (RETURN / USB)
   for (let i = 0; i < dev.channelX.length; i++) {
     const off = i === 1 ? -7 : i === 2 ? 7 : 0; // Ch 2 -> A, Ch 3 -> B, Ch 1/4 -> THRU!
     buildSlideSwitch(dev.channelX[i]!, 948, true, off);
@@ -518,28 +529,28 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
   buildSlideSwitch(777, 976, true, 0); // CH FADER curve
   buildSlideSwitch(777, 1030, true, 5); // CROSSFADER sharp cut
 
-  // Recessed USB A / B bays with raised covers + glowing blue indicator strips
-  for (const ux of [55, 175]) {
-    const [bx, bz] = local(dev, ux, 100);
-    const bayGeo = new RoundedBoxGeometry(92 / dev.pxPerM, 0.0022, 68 / dev.pxPerM, 2, 0.0008);
+  // Recessed USB A / B bays with raised covers + glowing blue indicator strips (exact crop-px!)
+  for (const ux of [70, 190]) {
+    const [bx, bz] = local(dev, ux, 96);
+    const bayGeo = new RoundedBoxGeometry(90 / dev.pxPerM, 0.0022, 60 / dev.pxPerM, 2, 0.0008);
     const bay = new THREE.Mesh(bayGeo, shared.bezel);
     bay.position.set(bx, TOP_Y + 0.0016, bz);
     group.add(bay);
-    const coverGeo = new RoundedBoxGeometry(82 / dev.pxPerM, 0.0038, 52 / dev.pxPerM, 2, 0.001);
+    const coverGeo = new RoundedBoxGeometry(80 / dev.pxPerM, 0.0038, 46 / dev.pxPerM, 2, 0.001);
     const cover = new THREE.Mesh(coverGeo, darkKeycapMat);
     cover.position.set(bx, TOP_Y + 0.0028, bz - 0.002);
     cover.castShadow = true;
     group.add(cover);
-    const ledGeo = new THREE.BoxGeometry(74 / dev.pxPerM, 0.001, 0.0018);
+    const ledGeo = new THREE.BoxGeometry(72 / dev.pxPerM, 0.001, 0.0018);
     const led = new THREE.Mesh(ledGeo, blueAcrylicMat);
-    led.position.set(bx, TOP_Y + 0.0022, bz + 0.0115);
+    led.position.set(bx, TOP_Y + 0.0022, bz + 0.0102);
     group.add(led);
     disposables.push(bayGeo, coverGeo, ledGeo);
   }
 
-  // 3D Gold-ringed 1/4" & dark 3.5mm Headphone A jacks on top deck
+  // 3D Gold-ringed 1/4" Headphone A jack on top deck (exact cropX=192, cropY=1058!)
   {
-    const [jx, jz] = local(dev, 180, 1062);
+    const [jx, jz] = local(dev, 192, 1058);
     const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4a448, roughness: 0.24, metalness: 0.92 });
     const ringGeo = new THREE.TorusGeometry(0.0056, 0.0012, 12, 32);
     ringGeo.rotateX(Math.PI / 2);
@@ -600,27 +611,51 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
   }
   addMerged(meterRailGeos, shared.bezel, false);
 
-  // Recessed X-PAD touch strip housing
-  {
-    const xp = dev.xpad;
-    const [x0, z0] = local(dev, xp.x0, xp.y0);
-    const [x1, z1] = local(dev, xp.x1, xp.y1);
-    const xpGeo = new RoundedBoxGeometry(x1 - x0, 0.0026, z1 - z0, 2, 0.0008);
-    const xpMat = new THREE.MeshPhysicalMaterial({
-      color: 0x090a0f,
-      roughness: 0.14,
-      metalness: 0.15,
-      clearcoat: 0.85,
-      clearcoatRoughness: 0.1,
-    });
-    const xpMesh = new THREE.Mesh(xpGeo, xpMat);
-    xpMesh.position.set((x0 + x1) / 2, TOP_Y + 0.0019, (z0 + z1) / 2);
-    group.add(xpMesh);
-    disposables.push(xpGeo, xpMat);
-  }
+  // Recessed X-PAD capacitive touch strip + authentic dotted electric-blue LED bar (matches real DJM-A9!)
+  const xp = dev.xpad;
+  const [xpx0, xpz0] = local(dev, xp.x0, xp.y0);
+  const [xpx1, xpz1] = local(dev, xp.x1, xp.y1);
+  const xpW = xpx1 - xpx0;
+  const xpD = xpz1 - xpz0;
+  const xpGeo = new RoundedBoxGeometry(xpW, 0.0024, xpD, 2, 0.0007);
+  const xpMat = new THREE.MeshPhysicalMaterial({
+    color: 0x07080c,
+    roughness: 0.14,
+    metalness: 0.15,
+    clearcoat: 0.85,
+    clearcoatRoughness: 0.1,
+  });
+  const xpMesh = new THREE.Mesh(xpGeo, xpMat);
+  xpMesh.position.set((xpx0 + xpx1) / 2, TOP_Y + 0.0018, (xpz0 + xpz1) / 2);
+  group.add(xpMesh);
 
-  // Beat FX glowing frosted-blue DOMED silicone ON/OFF button (rounded hemisphere crown!)
-  const [bfxX, bfxZ] = local(dev, 945, 1022);
+  // Live dotted electric-blue LED line along the top groove of the X-PAD (just like official DJM-A9 photo!)
+  const xpLedCanvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+  let xpLedCtx: CanvasRenderingContext2D | null = null;
+  let xpLedTex: THREE.CanvasTexture | null = null;
+  if (xpLedCanvas) {
+    xpLedCanvas.width = 256;
+    xpLedCanvas.height = 16;
+    xpLedCtx = xpLedCanvas.getContext("2d");
+    xpLedTex = new THREE.CanvasTexture(xpLedCanvas);
+    xpLedTex.colorSpace = THREE.SRGBColorSpace;
+    disposables.push(xpLedTex);
+  }
+  const xpGlowGeo = new THREE.PlaneGeometry(xpW * 0.92, xpD * 0.16);
+  xpGlowGeo.rotateX(-Math.PI / 2);
+  const xpGlowMat = new THREE.MeshBasicMaterial({
+    map: xpLedTex,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
+  const xpGlow = new THREE.Mesh(xpGlowGeo, xpGlowMat);
+  xpGlow.position.set((xpx0 + xpx1) / 2, TOP_Y + 0.00315, xpz0 + xpD * 0.24);
+  group.add(xpGlow);
+  disposables.push(xpGeo, xpMat, xpGlowGeo, xpGlowMat);
+
+  // Beat FX glowing frosted-blue DOMED silicone ON/OFF button (exact cropX=946, cropY=1028!)
+  const [bfxX, bfxZ] = local(dev, 946, 1028);
   const bfxWellGeo = new THREE.CylinderGeometry(0.0145, 0.015, 0.002, 40);
   const bfxWell = new THREE.Mesh(bfxWellGeo, shared.bezel);
   bfxWell.position.set(bfxX, TOP_Y + 0.0014, bfxZ);
@@ -731,28 +766,217 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     },
   };
 
-  // Beat FX colour display clearcoat glass
+  // =========================================================================
+  // LIVE DYNAMIC 3D BEAT FX COLOUR OLED DISPLAY (CanvasTexture updated live!)
+  // =========================================================================
   const bfx = dev.beatFxDisplay;
   const [bx0, bz0] = local(dev, bfx.x0, bfx.y0);
   const [bx1, bz1] = local(dev, bfx.x1, bfx.y1);
+
+  const bfxCanvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+  let bfxCtx: CanvasRenderingContext2D | null = null;
+  let bfxTex: THREE.CanvasTexture | null = null;
+  if (bfxCanvas) {
+    bfxCanvas.width = 384;
+    bfxCanvas.height = 310;
+    bfxCtx = bfxCanvas.getContext("2d");
+    bfxTex = new THREE.CanvasTexture(bfxCanvas);
+    bfxTex.colorSpace = THREE.SRGBColorSpace;
+    bfxTex.anisotropy = 4;
+    disposables.push(bfxTex);
+  }
+
   const bfxGlassGeo = new THREE.PlaneGeometry(bx1 - bx0, bz1 - bz0);
   bfxGlassGeo.rotateX(-Math.PI / 2);
   const bfxGlassMat = new THREE.MeshPhysicalMaterial({
-    color: 0x050507,
-    transparent: true,
-    opacity: 0.24,
-    roughness: 0.05,
-    metalness: 0,
+    color: 0x040507,
+    roughness: 0.055,
+    metalness: 0.04,
     clearcoat: 1,
     clearcoatRoughness: 0.03,
+    emissive: new THREE.Color(0xffffff),
+    emissiveMap: bfxTex,
+    emissiveIntensity: 1.35,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
   });
   const bfxGlass = new THREE.Mesh(bfxGlassGeo, bfxGlassMat);
-  bfxGlass.position.set((bx0 + bx1) / 2, TOP_Y + 0.0022, (bz0 + bz1) / 2);
+  bfxGlass.position.set((bx0 + bx1) / 2, TOP_Y + 0.0024, (bz0 + bz1) / 2);
   group.add(bfxGlass);
   disposables.push(bfxGlassGeo, bfxGlassMat);
+
+  let lastDrawTime = -1;
+  const updateBeatFxScreen: DjmRig["updateBeatFxScreen"] = ({
+    fxName,
+    division,
+    xpadPos,
+    freqMask,
+    active,
+    power,
+    time,
+  }) => {
+    const clampedX = Math.max(0, Math.min(1, xpadPos));
+    xpGlowMat.opacity = Math.max(0, (power - 0.08) / 0.92) * (active ? 1.0 : 0.72);
+    bfxGlassMat.emissiveIntensity = Math.max(0, (power - 0.08) / 0.92) * (active ? 1.45 : 1.18);
+
+    if (!bfxCtx || !bfxTex || !bfxCanvas) return;
+    if (time - lastDrawTime < 0.04 && lastDrawTime >= 0) return;
+    lastDrawTime = time;
+
+    // 1) Update authentic dotted electric-blue LED strip along the physical 3D X-PAD
+    if (xpLedCtx && xpLedTex && xpLedCanvas) {
+      xpLedCtx.clearRect(0, 0, xpLedCanvas.width, xpLedCanvas.height);
+      const totalDots = 34;
+      const litDots = Math.max(2, Math.round(clampedX * totalDots));
+      for (let i = 0; i < totalDots; i++) {
+        const dx = 4 + (i / (totalDots - 1)) * (xpLedCanvas.width - 8);
+        const lit = i < litDots;
+        xpLedCtx.fillStyle = lit ? "#8cb4ff" : "rgba(70, 100, 165, 0.16)";
+        xpLedCtx.fillRect(dx - 2, 4, 4, 8);
+      }
+      xpLedTex.needsUpdate = true;
+    }
+
+    // 2) Authentic Pioneer DJ DJM-A9 Beat FX Colour OLED Display (1:1 match to official hardware!)
+    const w = bfxCanvas.width;
+    const h = bfxCanvas.height;
+    bfxCtx.fillStyle = "#08090c";
+    bfxCtx.fillRect(0, 0, w, h);
+
+    // Subtle dark panel frame inset
+    const padX = 14;
+    const innerW = w - padX * 2;
+
+    // Row 1: Green bordered "TAP" badge + crisp white "124.0 BPM"
+    bfxCtx.strokeStyle = "#5ad460";
+    bfxCtx.lineWidth = 2;
+    bfxCtx.strokeRect(padX + 4, 14, 62, 24);
+    bfxCtx.fillStyle = "#5ad460";
+    bfxCtx.font = "600 15px system-ui, sans-serif";
+    bfxCtx.textAlign = "center";
+    bfxCtx.fillText("TAP", padX + 35, 31);
+
+    bfxCtx.fillStyle = "#f2f2ee";
+    bfxCtx.font = "600 32px system-ui, sans-serif";
+    bfxCtx.textAlign = "right";
+    bfxCtx.fillText("124.0", w - padX - 48, 37);
+    bfxCtx.fillStyle = "#b4bac4";
+    bfxCtx.font = "600 14px system-ui, sans-serif";
+    bfxCtx.textAlign = "left";
+    bfxCtx.fillText("BPM", w - padX - 42, 36);
+
+    // Row 2: Large clean centered Effect Name (e.g. ECHO / MOBIUS)
+    bfxCtx.fillStyle = "#f5f5f0";
+    bfxCtx.font = "500 38px system-ui, sans-serif";
+    bfxCtx.textAlign = "center";
+    bfxCtx.fillText(fxName.toUpperCase(), w / 2, 92);
+
+    // Row 3: 3-column primary beat division bar (neighbor | ACTIVE in solid cream-white | neighbor)
+    const allDivs = ["1/4", "1/2", "3/4", "1", "2"];
+    const selIdx = Math.max(0, allDivs.indexOf(division));
+    const prevDiv = allDivs[Math.max(0, selIdx - 1)] ?? "3/4";
+    const curDiv = allDivs[selIdx] ?? "1";
+    const nextDiv = allDivs[Math.min(allDivs.length - 1, selIdx + 1)] ?? "2";
+    const shownDivs = selIdx === 0 ? ["1/4", "1/2", "3/4"] : selIdx === allDivs.length - 1 ? ["3/4", "1", "2"] : [prevDiv, curDiv, nextDiv];
+
+    const row3Y = 112;
+    const row3H = 54;
+    const col3W = innerW / 3;
+    bfxCtx.strokeStyle = "rgba(215, 222, 232, 0.34)";
+    bfxCtx.lineWidth = 1.5;
+    bfxCtx.beginPath();
+    bfxCtx.moveTo(padX, row3Y);
+    bfxCtx.lineTo(padX + innerW, row3Y);
+    bfxCtx.moveTo(padX, row3Y + row3H);
+    bfxCtx.lineTo(padX + innerW, row3Y + row3H);
+    bfxCtx.stroke();
+
+    shownDivs.forEach((d, i) => {
+      const cx = padX + i * col3W;
+      const isActive = d === curDiv;
+      if (isActive) {
+        bfxCtx.fillStyle = "#eeede3";
+        bfxCtx.fillRect(cx + 1, row3Y + 1, col3W - 2, row3H - 2);
+      } else if (i > 0) {
+        bfxCtx.strokeStyle = "rgba(215, 222, 232, 0.28)";
+        bfxCtx.beginPath();
+        bfxCtx.moveTo(cx, row3Y);
+        bfxCtx.lineTo(cx, row3Y + row3H);
+        bfxCtx.stroke();
+      }
+      bfxCtx.fillStyle = isActive ? "#0b0c0f" : "#ecece6";
+      bfxCtx.font = "600 30px system-ui, sans-serif";
+      bfxCtx.textAlign = "center";
+      bfxCtx.fillText(d, cx + col3W / 2, row3Y + 38);
+    });
+
+    // Row 4: TIME  484 msec + subtle LOW/MID/HI indicator dots
+    const divMap: Record<string, number> = { "1/4": 121, "1/2": 242, "3/4": 363, "1": 484, "2": 968 };
+    const msec = divMap[division] ?? 484;
+    bfxCtx.fillStyle = "#a8b0bc";
+    bfxCtx.font = "500 16px system-ui, sans-serif";
+    bfxCtx.textAlign = "left";
+    bfxCtx.fillText("TIME", padX + 18, 200);
+    bfxCtx.fillStyle = "#f2f2ec";
+    bfxCtx.font = "600 26px system-ui, sans-serif";
+    bfxCtx.textAlign = "center";
+    bfxCtx.fillText(`${msec}`, w * 0.5, 202);
+    bfxCtx.fillStyle = "#a8b0bc";
+    bfxCtx.font = "500 15px system-ui, sans-serif";
+    bfxCtx.textAlign = "left";
+    bfxCtx.fillText("msec", w * 0.5 + 36, 200);
+
+    // Subtle right-side frequency band indicators (L M H)
+    const bandFlags = [freqMask.low, freqMask.mid, freqMask.hi];
+    bandFlags.forEach((on, idx) => {
+      bfxCtx.fillStyle = on ? "#5ac8cf" : "rgba(148,163,184,0.22)";
+      bfxCtx.fillRect(w - padX - 38 + idx * 12, 189, 8, 8);
+    });
+
+    // Row 5: Signature DJM-A9 Mint-Teal "∞ BEAT" bar
+    const tealY = 216;
+    const tealH = 26;
+    bfxCtx.fillStyle = "#62cbd1";
+    bfxCtx.fillRect(padX, tealY, innerW, tealH);
+    bfxCtx.fillStyle = "#f8fbfc";
+    bfxCtx.font = "600 15px system-ui, sans-serif";
+    bfxCtx.textAlign = "center";
+    bfxCtx.fillText("∞  BEAT", w / 2, tealY + 18);
+
+    // Row 6: 6-column X-PAD division strip (1/16 | 1/8 | 1/4 | 1/2 | 3/4 | 1) synced live to X-PAD touch!
+    const xpDivs = ["1/16", "1/8", "1/4", "1/2", "3/4", "1"];
+    const xpSelIdx = Math.min(xpDivs.length - 1, Math.floor(clampedX * xpDivs.length));
+    const row6Y = tealY + tealH;
+    const row6H = h - row6Y - 12;
+    const col6W = innerW / xpDivs.length;
+
+    bfxCtx.strokeStyle = "rgba(215, 222, 232, 0.34)";
+    bfxCtx.lineWidth = 1.25;
+    bfxCtx.strokeRect(padX, row6Y, innerW, row6H);
+
+    xpDivs.forEach((lbl, i) => {
+      const cx = padX + i * col6W;
+      const isXpActive = i === xpSelIdx;
+      if (isXpActive) {
+        bfxCtx.fillStyle = "#eeede3";
+        bfxCtx.fillRect(cx + 1, row6Y + 1, col6W - 2, row6H - 2);
+      } else if (i > 0) {
+        bfxCtx.strokeStyle = "rgba(215, 222, 232, 0.28)";
+        bfxCtx.beginPath();
+        bfxCtx.moveTo(cx, row6Y);
+        bfxCtx.lineTo(cx, row6Y + row6H);
+        bfxCtx.stroke();
+      }
+      bfxCtx.fillStyle = isXpActive ? "#0b0c0f" : "#ecece6";
+      bfxCtx.font = "600 18px system-ui, sans-serif";
+      bfxCtx.textAlign = "center";
+      bfxCtx.fillText(lbl, cx + col6W / 2, row6Y + row6H * 0.64);
+    });
+
+    bfxCtx.textAlign = "left";
+    bfxTex.needsUpdate = true;
+  };
 
   // Rear Bluetooth/Wi-Fi antenna
   const [ax, az] = local(dev, dev.antenna.at[0], dev.antenna.at[1]);
@@ -781,9 +1005,11 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     group,
     panel,
     colorKnobs,
+    centerLockSwitch,
     faders,
     crossfader,
     beatFxDomeMat,
+    updateBeatFxScreen,
     hitTargets: {
       ch2Fader: faders[1]!.mesh,
       ch2Filter: colorKnobs[1]!,

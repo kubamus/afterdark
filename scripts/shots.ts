@@ -64,8 +64,8 @@ async function captureDesktop() {
     { shot: "cdj-sound", file: "08-cdj-sound-1440.png" },
     { shot: "signal", file: "09-signal-bridge-1440.png" },
     { shot: "djm-color", file: "10-djm-color-1440.png" },
+    { shot: "djm-beatfx", file: "10b-djm-beatfx-1440.png" },
     { shot: "djm-fader", file: "11-djm-fader-1440.png" },
-    { shot: "control", file: "12-control-idle-1440.png" },
   ];
 
   for (const t of targets) {
@@ -78,19 +78,22 @@ async function captureDesktop() {
         window.scrollTo({ top: y, behavior: "instant" });
       }
     }, t.shot);
-    await page.waitForTimeout(1050);
-    await page.screenshot({ path: `${OUT}/${t.file}` });
+    if (t.shot === "signal") {
+      // Capture initial dark empty room + unplugged normal black cables, then wait for full 3-stage plug-in + club lights!
+      await page.waitForTimeout(450);
+      await page.screenshot({ path: `${OUT}/${t.file}` });
+      await page.waitForTimeout(3400);
+      await page.screenshot({ path: `${OUT}/09b-signal-club-lit-1440.png` });
+    } else {
+      await page.waitForTimeout(1050);
+      await page.screenshot({ path: `${OUT}/${t.file}` });
+    }
   }
 
-  // Test Act V interaction: click Drop on beat and wait for choreographed drop to complete (~2.2s)
-  await page.getByRole("button", { name: "Drop on beat" }).click();
-  await page.waitForTimeout(2300);
-  await page.screenshot({ path: `${OUT}/13-control-live-1440.png` });
-
-  // Continue to Act VI (Moment & Stillness) and Act VII (Final & Specs)
+  // Continue to Act VI (Moment POV + Gallery) and Act VII (Final & Specs)
   const tailTargets = [
+    { selector: '[data-shot="pov"]', file: "13b-moment-pov-1440.png" },
     { selector: ".moment-hero-plate", file: "13-moment-climax-1440.png" },
-    { selector: ".stillness", file: "14-stillness-1440.png" },
     { selector: ".final-hero", file: "15-final-1440.png" },
     { selector: "#specs", file: "16-specs-1440.png" },
   ];
@@ -131,7 +134,7 @@ async function captureMobileAndLarge() {
   for (const [sel, file] of [
     ['[data-shot="overhead"]', "19-overhead-mobile.png"],
     ['[data-shot="cdj-screen"]', "20-cdj-mobile.png"],
-    ["#take-control", "21-control-mobile.png"],
+    ['[data-shot="pov"]', "21-pov-mobile.png"],
     [".final-hero", "22-final-mobile.png"],
   ] as const) {
     await mobPage.evaluate((s) => {

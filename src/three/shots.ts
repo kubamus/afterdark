@@ -85,22 +85,19 @@ export const SHOTS: Record<string, Partial<Shot>> = {
   // Front-panel NFC touchpoint & USB-C / cloud connectivity macro
   "cdj-front": s({ pos: [-0.24, 0.14, 0.7], target: [-0.4, 0.068, 0.19], fov: 23, key: 0.62, rim: 1.12, spot: 0.62, env: 0.52, screen: 1, venue: 0.1, fit: 0.48 }),
   "cdj-sound": s({ pos: [-1.05, 0.95, 1.3], target: CDJL, fov: 28, key: 0.16, rim: 0.42, env: 0.18, power: 0.5, led: 0.75, venue: 0.08, fit: 0.8 }),
-  // Signature rear-booth audio signal bridge (CDJ-3000X -> DJM-A9 Ch 2)
-  signal: s({ pos: [-0.26, 0.76, -1.04], target: [-0.18, 0.05, -0.18], fov: 31, key: 0.28, rim: 0.62, env: 0.3, power: 0.72, signal: 1, demo: 0.55, venue: 0.18, fit: 0.8 }),
+  // Rear-booth cable plug-in: starts dark (no club), normal black cables slide into rear sockets -> club lights turn on!
+  signal: s({ pos: [0.06, 0.27, -0.78], target: [0.0, 0.14, 0.18], fov: 44, key: 0.24, rim: 0.72, env: 0.28, power: 0.06, led: 0.12, signal: 1, demo: 0, venue: 0, fit: 0.85 }),
   "djm-intro": s({ pos: [0.0, 0.96, 0.28], target: [0, 0.0, 0.0], fov: 30, key: 0.96, rim: 0.68, env: 0.52, demo: 0.75, venue: 0.14, fit: 0.9 }),
   "djm-channels": s({ pos: [-0.04, 0.38, 0.25], target: [0.0, 0.095, -0.065], fov: 30, key: 0.84, rim: 0.92, env: 0.54, demo: 1, venue: 0.12, fit: 0.55 }),
   "djm-ess": s({ pos: [0.54, 0.42, 0.76], target: [0.0, 0.06, 0.0], fov: 27, key: 0.34, rim: 0.82, env: 0.36, demo: 0.65, venue: 0.1, fit: 0.7 }),
   // Tight macro on DJM-A9 Sound Color FX knobs & CENTER LOCK
   "djm-color": s({ pos: [-0.06, 0.265, 0.2], target: [-0.035, 0.105, -0.015], fov: 26, key: 0.76, rim: 1.05, spot: 0.58, env: 0.58, demo: 0.85, venue: 0.1, fit: 0.45 }),
   // Tight macro on Beat FX colour display, X-PAD & blue ON/OFF dome
-  "djm-beatfx": s({ pos: [0.31, 0.32, 0.16], target: [0.155, 0.095, -0.06], fov: 28, key: 0.62, rim: 0.9, env: 0.52, demo: 0.9, venue: 0.14, fit: 0.45 }),
-  // Low raking macro directly on the 3rd-gen MAGVEL FADER & upgraded channel faders
-  "djm-fader": s({ pos: [0.14, 0.165, 0.44], target: [-0.01, 0.095, 0.155], fov: 25, key: 0.7, rim: 1.2, spot: 0.68, env: 0.6, demo: 0.75, venue: 0.12, fit: 0.4 }),
+  "djm-beatfx": s({ pos: [0.34, 0.34, 0.16], target: [0.16, 0.095, -0.055], fov: 28, key: 0.64, rim: 0.94, env: 0.54, demo: 0.9, venue: 0.14, fit: 0.45 }),
+  // Elevated top-down angle showing the 3rd-gen MAGVEL FADER & all 4 channel faders clearly from above
+  "djm-fader": s({ pos: [0.02, 0.56, 0.46], target: [-0.008, 0.09, 0.21], fov: 29, key: 0.82, rim: 1.15, spot: 0.56, env: 0.58, demo: 0.78, venue: 0.12, fit: 0.48 }),
   "djm-phones": s({ pos: [0.0, 0.72, 0.78], target: [0, 0.045, 0.05], fov: 33, key: 0.82, rim: 0.92, env: 0.5, demo: 0.75, venue: 0.12, fit: 0.85 }),
-  // Act V Take Control: clean performance framing over Left CDJ-3000X + DJM-A9 Ch 2/3
-  control: s({ pos: [-0.15, 0.68, 0.66], target: [-0.18, 0.04, -0.02], fov: 36, key: 0.74, rim: 0.96, env: 0.48, demo: 0, venue: 0.26, crowd: 0.16, fit: 0.88 }),
-  pov: s({ pos: [0.0, 0.52, 0.86], target: [0, 0.36, -3], fov: 52, exposure: 1.1, key: 0.24, rim: 0.74, venue: 1, crowd: 1, demo: 1, fit: 0.6 }),
-  still: s({ pos: [0.0, 0.5, 0.9], target: [0, 0.3, -3], fov: 50, exposure: 0.0, key: 0, rim: 0, spot: 0, env: 0, power: 0, led: 0, venue: 0, crowd: 0, demo: 0, fit: 0.6 }),
+  pov: s({ pos: [0.0, 0.48, 0.84], target: [0, 0.34, -3], fov: 50, exposure: 1.08, key: 0.14, rim: 0.52, env: 0.2, venue: 1, crowd: 1, demo: 1, fit: 0.6 }),
   final: s({ pos: [0.92, 0.62, 1.22], target: [-0.02, 0.02, -0.02], fov: 27, exposure: 1.1, key: 0.98, rim: 1.24, env: 0.56, power: 1, led: 1, venue: 0.24, crowd: 0, demo: 0.6, fit: 0.95 }),
 };
 

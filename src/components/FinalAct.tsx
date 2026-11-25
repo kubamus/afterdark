@@ -25,7 +25,6 @@ export function FinalAct() {
               className="btn-primary"
             >
               <span>Explore CDJ-3000X</span>
-              <span className="btn-arrow" aria-hidden="true">↗</span>
             </a>
             <a
               href={LINKS.djm}
@@ -34,7 +33,6 @@ export function FinalAct() {
               className="btn-secondary"
             >
               <span>Explore DJM-A9</span>
-              <span className="btn-arrow" aria-hidden="true">↗</span>
             </a>
             <a
               href={LINKS.dealer}
@@ -43,7 +41,6 @@ export function FinalAct() {
               className="btn-secondary"
             >
               <span>Find a dealer</span>
-              <span className="btn-arrow" aria-hidden="true">↗</span>
             </a>
           </div>
         </div>
@@ -53,7 +50,7 @@ export function FinalAct() {
       <div id="specs" className="specs-section" aria-label="Technical specifications">
         <div className="container">
           <div className="specs-header">
-            <h2 className="t-display-wide">Technical Specifications</h2>
+            <h2 className="t-display-wide">Technical specifications</h2>
             <div className="specs-tabs" role="tablist" aria-label="Select product specifications">
               <button
                 type="button"
@@ -86,7 +83,7 @@ export function FinalAct() {
                   rel="noopener noreferrer"
                   className="t-mono"
                 >
-                  Official page ↗
+                  Official page
                 </a>
               </div>
               <dl className="spec-list">
@@ -108,7 +105,7 @@ export function FinalAct() {
                   rel="noopener noreferrer"
                   className="t-mono"
                 >
-                  Official page ↗
+                  Official page
                 </a>
               </div>
               <dl className="spec-list">
@@ -128,14 +125,13 @@ export function FinalAct() {
         <div className="container footer-inner">
           <div className="footer-credits">
             <p>
-              <strong>AFTER DARK</strong> — Digital campaign showcase for the AlphaTheta CDJ-3000X
-              and Pioneer DJ DJM-A9. Product photography, film excerpts and verified technical
-              specifications reference official AlphaTheta and Pioneer DJ publications. Club
-              photography by Arnold Jaeger Werner (CC BY 2.0, Wikimedia Commons). Interactive browser
-              audio is original Web Audio synthesis at 124 BPM.
+              After Dark is an interactive 3D product guide for the AlphaTheta CDJ-3000X and Pioneer
+              DJ DJM-A9. Product photography, film clips, and technical specifications come from
+              official AlphaTheta and Pioneer DJ documentation. Club photographs are by Arnold
+              Jaeger Werner under CC BY 2.0 on Wikimedia Commons.
             </p>
           </div>
-          <div className="footer-links t-mono">
+          <div className="footer-links">
             <a href={LINKS.cdj} target="_blank" rel="noopener noreferrer">
               CDJ-3000X
             </a>
@@ -146,7 +142,7 @@ export function FinalAct() {
               Dealers
             </a>
             <button type="button" onClick={() => scrollTo(0)}>
-              Back to 23:52 ↑
+              Back to top
             </button>
           </div>
         </div>

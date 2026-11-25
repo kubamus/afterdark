@@ -1,4 +1,3 @@
-import { ControlAct } from "@/components/ControlAct";
 import { FinalAct } from "@/components/FinalAct";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
@@ -16,7 +15,6 @@ export default function HomePage() {
         <InstrumentAct />
         <CdjAct />
         <DjmAct />
-        <ControlAct />
         <MomentAct />
         <FinalAct />
       </main>

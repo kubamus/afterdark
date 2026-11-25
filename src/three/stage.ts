@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { audioEngine } from "@/audio/engine";
+import { deckAudio } from "@/audio/deckAudio";
 import { buildBooth, type BoothRig, type BoothTextures } from "./booth";
 import { buildClubEnvironment } from "./venue";
 import { cloneShot, DEFAULT_SHOT, fitToAspect, sampleShots, type Anchor, type Shot } from "./shots";
@@ -8,7 +8,7 @@ import { frame, ui } from "@/lib/store";
 
 export interface StageController {
   setAnchors(anchors: Anchor[]): void;
-  setShotOverride(shot: Shot | null): void;
+  setShotOverride(shot: Shot | null, shotId?: string | null): void;
   render(dt: number, elapsed: number): void;
   resize(): void;
   dispose(): void;
@@ -35,8 +35,8 @@ interface SpatialCalloutBinding {
 const CALLOUT_BINDINGS: SpatialCalloutBinding[] = [
   { id: "jog-collar", shots: ["cdj-jog"], owner: "cdjLeft", anchorKey: "jogCollar", offsetY: 0.008 },
   { id: "jog-lcd", shots: ["cdj-jog"], owner: "cdjLeft", anchorKey: "jog", offsetY: 0.01 },
-  { id: "play-halo", shots: ["cdj-playcue"], owner: "cdjLeft", anchorKey: "play", offsetY: 0.014 },
-  { id: "hot-cues", shots: ["cdj-screen", "cdj-intro"], owner: "cdjLeft", anchorKey: "hotCues", offsetY: 0.008 },
+  { id: "play-halo", shots: ["cdj-playcue"], owner: "cdjLeft", anchorKey: "play", offsetY: 0.002 },
+  { id: "hot-cues", shots: ["cdj-screen"], owner: "cdjLeft", anchorKey: "hotCues", offsetY: 0.004 },
   { id: "nfc-front", shots: ["cdj-front"], owner: "cdjLeft", anchorKey: "front", offsetY: 0.006 },
   { id: "djm-color", shots: ["djm-color"], owner: "djm", anchorKey: "color", offsetY: 0.014 },
   { id: "djm-beatfx", shots: ["djm-beatfx"], owner: "djm", anchorKey: "beatfxDome", offsetY: 0.01 },
@@ -110,7 +110,7 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
       front: loadTex("/assets/tex/djm-front.webp"),
       faderCap: loadTex("/assets/tex/djm-fadercap.webp", markLoaded),
     },
-    crowd: loadTex("/assets/img/club-2-sm.webp"),
+    crowd: loadTex("/assets/img/club-crowd-hd.webp"),
   };
 
   const booth: BoothRig = buildBooth(textures);
@@ -118,6 +118,7 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
 
   let anchors: Anchor[] = [];
   let overrideShot: Shot | null = null;
+  let overrideShotId: string | null = null;
   const desiredShot = cloneShot(DEFAULT_SHOT);
   const currentShot = cloneShot(DEFAULT_SHOT);
   let initialized = false;
@@ -148,40 +149,65 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
   }, 1100);
 
   // =========================================================================
-  // DIRECT 3D HARDWARE INTERACTION + HOVER RETICLE FEEDBACK
+  // SECTION-SCOPED 3D HARDWARE INTERACTION + HOVER RETICLE FEEDBACK
+  // Interaction is strictly limited to dedicated hardware showcase sections
+  // (never accidental scratching or presses on Hero, Overview, Signal, or POV!)
   // =========================================================================
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const hotCueMeshes = booth.cdjLeft.hotCues.map((hc) => hc.hitMesh);
-  const hitObjects: THREE.Object3D[] = [
-    booth.cdjLeft.play.hitMesh,
-    booth.cdjLeft.cue.hitMesh,
-    booth.cdjLeft.jogHit,
-    booth.djm.hitTargets.beatFxDome,
-    ...hotCueMeshes,
-  ];
-  let draggingJog = false;
-  let dragLastX = 0;
+
+  const getAllowedHitObjects = (): THREE.Object3D[] => {
+    switch (frame.activeShot) {
+      case "cdj-jog":
+        return [booth.cdjLeft.jogHit, booth.cdjLeft.jogRimHit];
+      case "cdj-playcue":
+        return [booth.cdjLeft.play.hitMesh, booth.cdjLeft.cue.hitMesh];
+      case "cdj-screen":
+        return hotCueMeshes;
+      case "djm-beatfx":
+        return [booth.djm.hitTargets.beatFxDome];
+      default:
+        return [];
+    }
+  };
+  let dragZone: "none" | "top" | "rim" = "none";
+  let dragLastAngle = 0;
+  let dragLastTimeMs = 0;
+  let dragReleaseVel = 0;
+  let scratchCoastActive = false;
   let holdingBeatFxDome = false;
+  const jogCenterWorld = new THREE.Vector3();
+
+  /** Project the 3D CDJ-3000X jog center into viewport pixel coords for true 360° circular spinning! */
+  const getJogScreenCenter = (): [number, number] => {
+    const anchor = booth.cdjLeft.anchors.jog;
+    if (!anchor) return [lastW * 0.5, lastH * 0.5];
+    jogCenterWorld.copy(anchor);
+    booth.cdjLeft.group.localToWorld(jogCenterWorld);
+    jogCenterWorld.project(camera);
+    return [(jogCenterWorld.x * 0.5 + 0.5) * lastW, (-jogCenterWorld.y * 0.5 + 0.5) * lastH];
+  };
 
   const isInteractiveDom = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) return false;
     return Boolean(
       target.closest(
-        "button, a, input, [role='slider'], .control-deck, .site-header, .inspect-controls, .specs-section, .story-rail, .micro-widget, .moment-gallery",
+        "button, a, input, [role='slider'], .site-header, .inspect-controls, .specs-section, .micro-widget, .cable-ignite-panel, .moment-gallery",
       ),
     );
   };
 
   const getHitLabel = (obj: THREE.Object3D): string | null => {
-    if (obj === booth.cdjLeft.play.hitMesh) return frame.controls.playing ? "PAUSE DECK 1" : "PLAY DECK 1";
-    if (obj === booth.cdjLeft.cue.hitMesh) return "HOLD CUE";
-    if (obj === booth.cdjLeft.jogHit) return "DRAG JOG PLATTER";
-    if (obj === booth.djm.hitTargets.beatFxDome) return "HOLD BEAT FX ROLL";
+    if (obj === booth.cdjLeft.play.hitMesh) return frame.controls.playing ? "Pause" : "Press PLAY";
+    if (obj === booth.cdjLeft.cue.hitMesh) return frame.controls.playing ? "Return to CUE" : "Hold CUE to play";
+    if (obj === booth.cdjLeft.jogHit) return "Top platter, spin to scratch";
+    if (obj === booth.cdjLeft.jogRimHit) return "Outer rim, spin to bend pitch";
+    if (obj === booth.djm.hitTargets.beatFxDome) return "Hold Beat FX";
     if (typeof obj.userData.hotCueIndex === "number") {
       const idx = obj.userData.hotCueIndex as number;
       const lbl = booth.cdjLeft.hotCues[idx]?.label ?? "";
-      return `HOT CUE ${lbl}`;
+      return `Hot Cue ${lbl}`;
     }
     return null;
   };
@@ -205,50 +231,89 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
 
   const onWindowPointerDown = (e: PointerEvent) => {
     if (isInteractiveDom(e.target)) return;
+    const allowed = getAllowedHitObjects();
+    if (allowed.length === 0) return;
+
     ndc.x = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
     ndc.y = -(e.clientY / Math.max(1, window.innerHeight)) * 2 + 1;
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObjects(hitObjects, false);
+    const hits = raycaster.intersectObjects(allowed, false);
     const first = hits[0];
     if (!first) return;
 
     if (first.object === booth.cdjLeft.play.hitMesh) {
-      const next = !frame.controls.playing;
+      const next = frame.controls.cueHeld ? true : !frame.controls.playing;
       frame.controls.playing = next;
-      frame.controls.demoPlayPulse = 1;
-      if (next) frame.controls.cueHeld = false;
+      frame.controls.playHeld = true;
+      frame.controls.playTapImpulse = 1;
       ui.set({ playing: next, cueHeld: frame.controls.cueHeld });
-      audioEngine.playClick("button");
+      deckAudio.setPlaying(next);
     } else if (first.object === booth.cdjLeft.cue.hitMesh) {
-      if (!frame.controls.playing) {
-        frame.controls.cueHeld = true;
-        ui.set({ cueHeld: true });
-        audioEngine.playClick("button");
+      const wasPlaying = frame.controls.playing;
+      frame.controls.playing = false;
+      frame.controls.cueHeld = true;
+      frame.controls.cueTapImpulse = 1;
+      ui.set({ playing: false, cueHeld: true });
+      if (wasPlaying) {
+        deckAudio.stopToCue();
+      } else {
+        deckAudio.startCueHold();
       }
-    } else if (first.object === booth.cdjLeft.jogHit) {
-      draggingJog = true;
-      dragLastX = e.clientX;
-      audioEngine.playClick("detent");
+    } else if (first.object === booth.cdjLeft.jogHit || first.object === booth.cdjLeft.jogRimHit) {
+      const isTop = first.object === booth.cdjLeft.jogHit;
+      dragZone = isTop ? "top" : "rim";
+      const [cx, cy] = getJogScreenCenter();
+      dragLastAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
+      dragLastTimeMs = performance.now();
+      dragReleaseVel = 0;
+      frame.controls.jogMode = isTop ? "scratch" : "bend";
+      frame.controls.jogTouchHeld = isTop;
+      frame.controls.jogVelocity = 0;
+      ui.set({ jogMode: isTop ? "scratch" : "bend" });
+      deckAudio.warmUpScratch();
     } else if (first.object === booth.djm.hitTargets.beatFxDome) {
       holdingBeatFxDome = true;
       frame.controls.beatFxHold = true;
       ui.set({ beatFxHold: true });
-      audioEngine.playClick("button");
     } else if (typeof first.object.userData.hotCueIndex === "number") {
       const idx = first.object.userData.hotCueIndex as number;
       frame.controls.hotCuePulses[idx] = 1;
       ui.set({ lastHotCue: idx });
-      audioEngine.playHotCue(idx);
     }
   };
 
   const onWindowPointerMove = (e: PointerEvent) => {
-    if (draggingJog) {
-      const dx = e.clientX - dragLastX;
-      dragLastX = e.clientX;
-      const sensitivity = 0.25 - frame.controls.jogFeel * 0.14;
-      frame.controls.jogVelocity += dx * sensitivity;
-      updateHoverReticle(e.clientX, e.clientY, "SPINNING JOG");
+    if (dragZone !== "none") {
+      const [cx, cy] = getJogScreenCenter();
+      const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+      // Shortest signed circular angular delta (+ = clockwise on screen, - = counter-clockwise)
+      const dTheta = Math.atan2(Math.sin(angle - dragLastAngle), Math.cos(angle - dragLastAngle));
+      dragLastAngle = angle;
+
+      const now = performance.now();
+      const dtSec = Math.max(0.004, Math.min(0.08, (now - dragLastTimeMs) / 1000));
+      dragLastTimeMs = now;
+
+      // 1:1 direct circular tracking (spin 360° endlessly either direction — zero reversal!)
+      const gain = dragZone === "top" ? 1.55 : 1.15;
+      const rotDeltaY = -dTheta * gain; // Three.js rotation.y negative = clockwise from above
+      booth.cdjLeft.jogPlatter.rotation.y += rotDeltaY;
+      booth.cdjLeft.jogPhaseRing.rotation.y += rotDeltaY;
+
+      const instVel = Math.max(-28, Math.min(28, rotDeltaY / dtSec));
+      dragReleaseVel = dragReleaseVel * 0.45 + instVel * 0.55;
+      frame.controls.jogVelocity = dragReleaseVel;
+
+      if (dragZone === "top") {
+        // Forward clockwise screen drag (+dTheta) = forward audio scratch through ahh-fresh.mp3!
+        const audioVel = Math.max(-24, Math.min(24, (dTheta * gain) / dtSec));
+        frame.controls.jogScratchVel = audioVel;
+        deckAudio.updateScratch(audioVel, dTheta * gain);
+        updateHoverReticle(e.clientX, e.clientY, "Scratching top platter");
+      } else {
+        frame.controls.jogPitchBend = Math.max(-1, Math.min(1, frame.controls.jogPitchBend + dTheta * 0.55));
+        updateHoverReticle(e.clientX, e.clientY, "Pitch bending outer rim");
+      }
       return;
     }
 
@@ -257,19 +322,44 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
       return;
     }
 
+    const allowed = getAllowedHitObjects();
+    if (allowed.length === 0) {
+      updateHoverReticle(e.clientX, e.clientY, null);
+      return;
+    }
+
     ndc.x = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
     ndc.y = -(e.clientY / Math.max(1, window.innerHeight)) * 2 + 1;
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObjects(hitObjects, false);
+    const hits = raycaster.intersectObjects(allowed, false);
     const label = hits[0] ? getHitLabel(hits[0].object) : null;
     updateHoverReticle(e.clientX, e.clientY, label);
   };
 
   const onWindowPointerUp = () => {
-    draggingJog = false;
+    if (dragZone !== "none") {
+      const wasTop = dragZone === "top";
+      dragZone = "none";
+      frame.controls.jogTouchHeld = false;
+      // Hand off real circular release momentum so flicks & backspins keep playing & pitching down!
+      const vel = Math.abs(dragReleaseVel) > 0.45 ? dragReleaseVel : 0;
+      frame.controls.jogVelocity = vel;
+      if (wasTop) {
+        if (Math.abs(vel) > 0.45) {
+          scratchCoastActive = true;
+        } else {
+          scratchCoastActive = false;
+          deckAudio.silenceScratch();
+        }
+      }
+    }
+    if (frame.controls.playHeld) {
+      frame.controls.playHeld = false;
+    }
     if (frame.controls.cueHeld) {
       frame.controls.cueHeld = false;
       ui.set({ cueHeld: false });
+      deckAudio.releaseCueHold();
     }
     if (holdingBeatFxDome) {
       holdingBeatFxDome = false;
@@ -281,6 +371,8 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
   window.addEventListener("pointerdown", onWindowPointerDown);
   window.addEventListener("pointermove", onWindowPointerMove, { passive: true });
   window.addEventListener("pointerup", onWindowPointerUp);
+  window.addEventListener("pointercancel", onWindowPointerUp);
+  window.addEventListener("blur", onWindowPointerUp);
 
   const onContextLost = (e: Event) => {
     e.preventDefault();
@@ -337,6 +429,10 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
     let activeShotId = frame.activeShot;
     if (overrideShot) {
       Object.assign(desiredShot, cloneShot(overrideShot));
+      if (overrideShotId) {
+        activeShotId = overrideShotId;
+        frame.activeShot = overrideShotId;
+      }
     } else {
       const sampled = sampleShots(anchors, frame.scrollY, desiredShot, 0.54);
       activeShotId = sampled.activeId;
@@ -345,6 +441,20 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
       if (ui.get().activeShot !== sampled.activeId) {
         ui.set({ activeShot: sampled.activeId });
       }
+    }
+
+    deckAudio.syncSection(activeShotId);
+    // Keep scratching ahh-fresh.mp3 seamlessly while a flicked/released top platter coasts to rest!
+    if (scratchCoastActive && dragZone === "none") {
+      if (activeShotId === "cdj-jog" && Math.abs(frame.controls.jogVelocity) > 0.35) {
+        const audioVel = -frame.controls.jogVelocity;
+        deckAudio.updateScratch(audioVel, audioVel * dt);
+      } else {
+        scratchCoastActive = false;
+        deckAudio.silenceScratch();
+      }
+    } else {
+      deckAudio.tick(frame.controls.jogVelocity);
     }
 
     const reduced = ui.get().reducedMotion;
@@ -407,8 +517,9 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
     setAnchors(next) {
       anchors = next;
     },
-    setShotOverride(shot) {
+    setShotOverride(shot, shotId = null) {
       overrideShot = shot;
+      overrideShotId = shot ? shotId : null;
     },
     render,
     resize,
@@ -417,6 +528,8 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
       window.removeEventListener("pointerdown", onWindowPointerDown);
       window.removeEventListener("pointermove", onWindowPointerMove);
       window.removeEventListener("pointerup", onWindowPointerUp);
+      window.removeEventListener("pointercancel", onWindowPointerUp);
+      window.removeEventListener("blur", onWindowPointerUp);
       canvas.removeEventListener("webglcontextlost", onContextLost);
       document.body.classList.remove("hw-hovering");
       booth.dispose();

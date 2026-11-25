@@ -2,14 +2,11 @@
  * Unified choreography director.
  *
  * Coordinates Lenis smooth scrolling, GSAP ScrollTrigger editorial reveals,
- * the Three.js Stage, and the Web Audio Engine on ONE single gsap.ticker clock —
- * zero competing animation loops, zero scroll-triggered resize glitches.
+ * visual 124 BPM meter/lighting rhythm, and the Three.js Stage on one gsap.ticker clock.
  */
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
-import { audioEngine } from "@/audio/engine";
-import { NIGHT } from "@/content/copy";
 import { clamp } from "@/lib/math";
 import { frame, ui } from "@/lib/store";
 import type { Anchor } from "@/three/shots";
@@ -23,17 +20,38 @@ export interface DirectorHandle {
   dispose(): void;
 }
 
-export function formatNightClock(progress: number): string {
-  const totalMins = NIGHT.start + (NIGHT.end - NIGHT.start) * clamp(progress, 0, 1);
-  const wrapped = ((Math.floor(totalMins) % 1440) + 1440) % 1440;
-  const hh = Math.floor(wrapped / 60);
-  const mm = wrapped % 60;
-  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+export function formatScrollPercent(progress: number): number {
+  return Math.round(clamp(progress, 0, 1) * 100);
+}
+
+/** Lightweight silent 124 BPM visual pulse for 15-segment LED meters & club lighting. */
+function updateVisualPulse(elapsed: number) {
+  const bpm = 124;
+  const beat = elapsed * (bpm / 60);
+  const beatFrac = beat - Math.floor(beat);
+  const kick = Math.exp(-beatFrac * 7.2);
+  const offbeat = Math.exp(-((beatFrac + 0.5) % 1) * 9.5);
+
+  frame.beat = beat;
+  frame.kick = kick;
+  frame.bass = kick * 0.85;
+  frame.energy = 0.35 + kick * 0.5 + offbeat * 0.15;
+
+  // Ch 1..4 + Master L/R authentic club meter levels
+  const ch2 = frame.controls.playing ? 0.35 + kick * 0.48 : 0.08 + offbeat * 0.1;
+  const ch3 = 0.44 + kick * 0.46 + Math.sin(elapsed * 3.1) * 0.05;
+  const master = Math.min(0.96, Math.max(ch2, ch3) + 0.08);
+  frame.levels[0] = 0.06 + offbeat * 0.08;
+  frame.levels[1] = ch2;
+  frame.levels[2] = ch3;
+  frame.levels[3] = 0.08 + kick * 0.08;
+  frame.levels[4] = master;
+  frame.levels[5] = Math.min(0.96, master * (0.96 + 0.04 * Math.sin(elapsed * 5.2)));
 }
 
 export function startDirector(
   stage: StageController | null,
-  onClock?: (clock: string) => void,
+  onProgress?: (pct: number) => void,
 ): DirectorHandle {
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   const updateReduced = () => ui.set({ reducedMotion: motionQuery.matches });
@@ -53,7 +71,7 @@ export function startDirector(
 
   let anchors: Anchor[] = [];
   let actMarkers: { id: string; y: number }[] = [];
-  let lastClock = "";
+  let lastPct = -1;
   const progressBar = document.querySelector<HTMLElement>(".header-progress-fill");
 
   const measureAnchors = () => {
@@ -133,7 +151,6 @@ export function startDirector(
     }
   }
 
-  // Pointer tracking for subtle physical camera parallax
   const onPointerMove = (e: PointerEvent) => {
     if (e.pointerType !== "mouse") return;
     frame.pointerX = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
@@ -141,7 +158,6 @@ export function startDirector(
   };
   window.addEventListener("pointermove", onPointerMove, { passive: true });
 
-  // Only resize WebGL stage on genuine window viewport resizes (prevents scroll flicker!)
   let resizeTimer: number | null = null;
   const onResize = () => {
     if (resizeTimer) window.clearTimeout(resizeTimer);
@@ -153,7 +169,6 @@ export function startDirector(
   };
   window.addEventListener("resize", onResize);
 
-  // Measure once immediately + once fonts settle
   measureAnchors();
   if (document.fonts) {
     void document.fonts.ready.then(() => {
@@ -162,7 +177,6 @@ export function startDirector(
     });
   }
 
-  // Single unified animation tick driven by GSAP ticker
   let elapsed = 0;
   const tick = (timeSec: number, deltaMs: number) => {
     const dt = Math.min(0.05, Math.max(0.001, deltaMs / 1000));
@@ -189,13 +203,13 @@ export function startDirector(
       ui.set({ act: activeAct });
     }
 
-    const clock = formatNightClock(frame.progress);
-    if (clock !== lastClock) {
-      lastClock = clock;
-      onClock?.(clock);
+    const pct = formatScrollPercent(frame.progress);
+    if (pct !== lastPct) {
+      lastPct = pct;
+      onProgress?.(pct);
     }
 
-    audioEngine.tick(dt);
+    updateVisualPulse(elapsed);
     stage?.render(dt, elapsed);
   };
 

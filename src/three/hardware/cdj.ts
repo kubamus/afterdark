@@ -51,12 +51,16 @@ export interface HotCuePadRig {
 export interface CdjRig {
   group: THREE.Group;
   panel: PanelUniforms;
-  /** Rotating jog platter assembly (spins with playback & interactive Jog Feel) */
+  /** Manual non-motorized jog platter assembly (ONLY rotates when a human spins/scratches it!) */
   jogPlatter: THREE.Group;
-  /** Subtle luminous ring tucked inside the jog chrome chamfer */
+  /** Virtual On-Jog LCD digital phase marker (rotates cleanly during playback while physical platter stays still) */
+  jogPhaseRing: THREE.Group;
+  /** Subtle luminous ring tucked inside the jog chrome chamfer (shifts RED on top touch, CYAN on rim bend) */
   jogRingMat: THREE.MeshStandardMaterial;
-  /** Hit target mesh for direct 3D jog interaction */
+  /** Hit target mesh for direct 3D TOP platter capacitive scratch interaction */
   jogHit: THREE.Mesh;
+  /** Hit target mesh for direct 3D OUTER concave dimple rim pitch-bend interaction */
+  jogRimHit: THREE.Mesh;
   /** Animated JOG FEEL physical rotary knob */
   jogFeelKnob: THREE.Group;
   /** Animated Tempo fader cap */
@@ -513,18 +517,33 @@ export function buildCdj(tex: CdjTextures, shared: CdjSharedMaterials): CdjRig {
     roughnessMap: shared.maps.anodizedRoughness,
   });
   const gripMesh = new THREE.Mesh(gripGeo, gripMat);
+  gripMesh.name = "CDJ-Jog-Rim-Hit";
   gripMesh.castShadow = true;
   gripMesh.receiveShadow = true;
   jogPlatter.add(gripMesh);
   disposables.push(gripGeo, gripMat);
 
-  // Machined brushed-chrome chamfer ring
+  // Solid inner dark-anodized jog core drum sealing the entire cavity beneath the top platter
+  // (eliminates any floating air gap between the chrome bevel and sculpted dimple collar!)
+  const coreDrumGeo = new THREE.CylinderGeometry(rPlatter + 0.0026, rPlatter + 0.006, gripHeight + 0.0022, 96);
+  const coreDrumMat = new THREE.MeshStandardMaterial({
+    color: 0x0b0b0f,
+    roughness: 0.62,
+    metalness: 0.42,
+  });
+  const coreDrum = new THREE.Mesh(coreDrumGeo, coreDrumMat);
+  coreDrum.position.y = (gripHeight + 0.0022) / 2;
+  jogPlatter.add(coreDrum);
+  disposables.push(coreDrumGeo, coreDrumMat);
+
+  // Machined brushed-chrome chamfer ring seated flush onto the solid inner drum & collar
   const bevelPts = [
     new THREE.Vector2(rPlatter - 0.0004, gripHeight + 0.0012),
     new THREE.Vector2(rPlatter + 0.0006, gripHeight + 0.0046),
     new THREE.Vector2(rPlatter + 0.0024, gripHeight + 0.005),
-    new THREE.Vector2(rPlatter + 0.0044, gripHeight + 0.0022),
-    new THREE.Vector2(rPlatter + 0.0048, gripHeight - 0.0005),
+    new THREE.Vector2(rPlatter + 0.0042, gripHeight + 0.002),
+    new THREE.Vector2(rPlatter + 0.0044, gripHeight - 0.0025),
+    new THREE.Vector2(rPlatter + 0.0028, gripHeight - 0.004),
   ];
   const silverRimGeo = new THREE.LatheGeometry(bevelPts, 128);
   const silverRim = new THREE.Mesh(silverRimGeo, shared.silver);
@@ -621,16 +640,34 @@ export function buildCdj(tex: CdjTextures, shared: CdjSharedMaterials): CdjRig {
   jogPlatter.add(lcdLens);
   disposables.push(lcdBezelGeo, lcdLensGeo, lcdLensMat);
 
-  // Luminous cue position tick
-  const tickGeo = new THREE.BoxGeometry(0.0022, 0.001, 0.0115);
+  // Virtual On-Jog LCD digital cue/playhead phase marker (rotates electronically during playback
+  // while the non-motorized physical jog platter itself stays completely stationary!)
+  const jogPhaseRing = new THREE.Group();
+  jogPhaseRing.name = "CDJ-Jog-Phase-Marker";
+  jogPhaseRing.position.y = gripHeight + platterH + 0.00095;
+  jogRoot.add(jogPhaseRing);
+
+  const phaseTickGeo = new THREE.BoxGeometry(0.0028, 0.0005, 0.0082);
+  const phaseTickMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: new THREE.Color(0xff3844),
+    emissiveIntensity: 2.4,
+    roughness: 0.2,
+  });
+  const phaseTick = new THREE.Mesh(phaseTickGeo, phaseTickMat);
+  phaseTick.position.set(0, 0, -(rDisplay * 0.84));
+  jogPhaseRing.add(phaseTick);
+  disposables.push(phaseTickGeo, phaseTickMat);
+
+  // Subtle physical notch on the capacitive platter rim (rotates ONLY when hand spins the jog!)
+  const tickGeo = new THREE.BoxGeometry(0.0022, 0.0009, 0.0115);
   const tickMat = new THREE.MeshStandardMaterial({
-    color: 0xf1f0ec,
-    emissive: new THREE.Color(0xf1f0ec),
-    emissiveIntensity: 0.85,
-    roughness: 0.28,
+    color: 0xcfd2da,
+    roughness: 0.34,
+    metalness: 0.65,
   });
   const tick = new THREE.Mesh(tickGeo, tickMat);
-  tick.position.set(0, gripHeight + platterH + 0.0007, -(rPlatter - 0.0105));
+  tick.position.set(0, gripHeight + platterH + 0.0006, -(rPlatter - 0.0105));
   jogPlatter.add(tick);
   disposables.push(tickGeo, tickMat);
 
@@ -1091,8 +1128,10 @@ export function buildCdj(tex: CdjTextures, shared: CdjSharedMaterials): CdjRig {
     group,
     panel,
     jogPlatter,
+    jogPhaseRing,
     jogRingMat,
     jogHit,
+    jogRimHit: gripMesh,
     jogFeelKnob,
     tempoCap,
     hotCues,

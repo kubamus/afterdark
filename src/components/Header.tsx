@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { audioEngine } from "@/audio/engine";
 import { ui } from "@/lib/store";
 import { useExperience } from "./StageCanvas";
 
@@ -9,33 +8,64 @@ const NAV_ITEMS = [
   { label: "Instrument", target: "#instrument", act: "instrument" },
   { label: "CDJ-3000X", target: "#cdj-3000x", act: "cdj" },
   { label: "DJM-A9", target: "#djm-a9", act: "djm" },
-  { label: "Take Control", target: "#take-control", act: "control" },
+  { label: "The moment", target: "#the-moment", act: "moment" },
   { label: "Specs", target: "#specs", act: "final" },
 ] as const;
 
+const ACT_LABELS: Record<string, string> = {
+  hero: "Overview",
+  instrument: "Instrument",
+  cdj: "CDJ-3000X",
+  djm: "DJM-A9",
+  moment: "The moment",
+  final: "Specifications",
+};
+
 export function Header() {
-  const { scrollTo, clock } = useExperience();
+  const { scrollTo, scrollPercent } = useExperience();
   const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const sound = useSyncExternalStore(
-    ui.subscribe,
-    () => ui.get().sound,
-    () => "off" as const,
-  );
   const act = useSyncExternalStore(
     ui.subscribe,
     () => ui.get().act,
     () => "hero",
   );
-  const playing = useSyncExternalStore(
-    ui.subscribe,
-    () => ui.get().playing,
-    () => false,
-  );
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 36);
+    let lastY = window.scrollY;
+    let accumDelta = 0;
+
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - lastY;
+      lastY = y;
+
+      setScrolled(y > 36);
+
+      if (y < 48) {
+        accumDelta = 0;
+        setHidden(false);
+        return;
+      }
+
+      // Reset directional accumulator whenever scroll direction reverses
+      if ((dy > 0 && accumDelta < 0) || (dy < 0 && accumDelta > 0)) {
+        accumDelta = 0;
+      }
+      accumDelta += dy;
+
+      // Apple-style hysteresis (~10px threshold) prevents trackpad bounce flicker
+      if (accumDelta > 12 && y > 88) {
+        setHidden(true);
+        accumDelta = 0;
+      } else if (accumDelta < -8) {
+        setHidden(false);
+        accumDelta = 0;
+      }
+    };
+
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -46,10 +76,18 @@ export function Header() {
     scrollTo(target, -40);
   };
 
+  const sectionLabel = ACT_LABELS[act] ?? "Overview";
+  const ringCircumference = 2 * Math.PI * 7;
+  const ringOffset = ringCircumference * (1 - scrollPercent / 100);
+  const isHidden = hidden && !menuOpen;
+
   return (
     <>
-      <header className={`site-header${scrolled ? " site-header--scrolled" : ""}`}>
-        <div className="header-inner">
+      <header
+        className={`site-header${scrolled ? " site-header--scrolled" : ""}${isHidden ? " site-header--hidden" : ""}`}
+        onFocus={() => setHidden(false)}
+      >
+        <div className="header-glass-bar">
           <a
             href="#top"
             className="brand-mark"
@@ -59,8 +97,8 @@ export function Header() {
               scrollTo(0);
             }}
           >
-            <span className={`brand-dot${playing || sound === "on" ? " brand-dot--live" : ""}`} />
-            AFTER DARK
+            <span className="brand-dot" />
+            <span>After Dark</span>
           </a>
 
           <nav className="header-nav" aria-label="Campaign sections">
@@ -80,28 +118,28 @@ export function Header() {
           </nav>
 
           <div className="header-utils">
-            <span className="night-clock t-mono" aria-label={`Time of night ${clock}`}>
-              {clock}
-            </span>
-
-            <button
-              type="button"
-              className={`sound-btn t-mono${sound === "on" ? " sound-btn--on" : ""}`}
-              onClick={() => void audioEngine.toggle()}
-              aria-pressed={sound === "on"}
-              disabled={sound === "unavailable"}
+            <div
+              className="scroll-progress-pill"
+              aria-label={`Current section: ${sectionLabel}, ${scrollPercent}% scrolled`}
             >
-              <span className="sound-bars" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-              <span>{sound === "on" ? "Sound on" : sound === "unavailable" ? "No audio" : "Sound off"}</span>
-            </button>
+              <svg className="progress-ring" viewBox="0 0 18 18" aria-hidden="true">
+                <circle className="progress-ring-track" cx="9" cy="9" r="7" />
+                <circle
+                  className="progress-ring-fill"
+                  cx="9"
+                  cy="9"
+                  r="7"
+                  strokeDasharray={ringCircumference}
+                  strokeDashoffset={ringOffset}
+                />
+              </svg>
+              <span className="scroll-progress-label">{sectionLabel}</span>
+              <span className="scroll-progress-pct">{scrollPercent}%</span>
+            </div>
 
             <button
               type="button"
-              className="menu-toggle t-mono"
+              className="menu-toggle"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
               aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -129,14 +167,11 @@ export function Header() {
                 }}
               >
                 <span>{item.label}</span>
-                <span className="t-mono t-muted" style={{ fontSize: "0.78rem" }}>
-                  →
-                </span>
               </a>
             ))}
           </nav>
-          <div className="t-mono t-muted" style={{ fontSize: "0.78rem", letterSpacing: "0.12em" }}>
-            {clock} — CDJ-3000X / DJM-A9
+          <div className="t-muted" style={{ fontSize: "0.82rem" }}>
+            {sectionLabel}, {scrollPercent}%
           </div>
         </div>
       )}

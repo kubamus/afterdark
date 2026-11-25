@@ -17,8 +17,8 @@ export function InstrumentAct() {
 
       {/* Shot 2: Full overhead booth silhouette with verified millimetre dimensions */}
       <div className="stage-beat stage-beat--overhead" data-shot="overhead" data-shot-anchor="0">
-        <div className="container">
-          <div className="booth-dimensions t-mono" aria-label="Booth physical layout dimensions" data-reveal="">
+        <div className="container" data-reveal="">
+          <div className="booth-dimensions" aria-label="Booth physical layout dimensions">
             <div className="booth-dim-cell">
               <strong>CDJ-3000X</strong>
               <span>344.6 mm</span>

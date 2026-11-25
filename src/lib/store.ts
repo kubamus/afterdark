@@ -1,18 +1,25 @@
 /**
  * Shared, framework-agnostic runtime state.
  *
- * High-frequency values (scroll, audio levels, control positions, hardware micro-states)
+ * High-frequency values (scroll, visual meter levels, control positions, hardware micro-states)
  * are plain mutable fields read by the render loop every frame — no React re-renders.
  * Low-frequency UI state goes through a tiny subscribe/emit store for useSyncExternalStore.
  */
 
 export type ColorFxMode = "filter" | "sweep" | "dubecho";
+export type JogInteractionMode = "idle" | "scratch" | "bend";
 
 export interface DeckControls {
-  /** deck 1 playing (the visitor's track) */
+  /** deck 1 playing */
   playing: boolean;
-  /** CUE held while paused (preview) */
+  /** CUE physically held down right now (momentary) */
   cueHeld: boolean;
+  /** PLAY physically held down right now (momentary) */
+  playHeld: boolean;
+  /** Momentary spring-back tap impulse for spammable PLAY presses (0..1) */
+  playTapImpulse: number;
+  /** Momentary spring-back tap impulse for spammable CUE stutters (0..1) */
+  cueTapImpulse: number;
   /** Sound Color FX knob, −1 (LOW) … 0 (CENTER) … +1 (HI) */
   filter: number;
   /** Active Sound Color FX mode on DJM-A9 */
@@ -27,20 +34,33 @@ export interface DeckControls {
   beatFxHold: boolean;
   /** Currently selected Beat FX name in Act IV */
   activeBeatFx: string;
-  /** CDJ-3000X Jog Feel tension (0 = light, 1 = heavy) */
-  jogFeel: number;
-  /** Instantaneous jog angular nudge velocity (rad/s) */
+  /** Active Beat FX rhythmic division */
+  beatFxDiv: "1/4" | "1/2" | "3/4" | "1" | "2";
+  /** Interactive X-PAD horizontal touch position (0..1) */
+  xpadPos: number;
+  /** DJM-A9 FX Frequency band toggles */
+  fxFreq: { low: boolean; mid: boolean; hi: boolean };
+  /** Current manual jog wheel touch zone (top capacitive scratch vs outer dimpled pitch bend) */
+  jogMode: JogInteractionMode;
+  /** True while hand is resting on the capacitive top platter */
+  jogTouchHeld: boolean;
+  /** Weighted manual jog angular velocity (rad/s) — never motorized */
   jogVelocity: number;
+  /** Instantaneous scratch velocity */
+  jogScratchVel: number;
+  /** Pitch bend amount (-1..+1) from nudging the outer dimpled rim */
+  jogPitchBend: number;
   /** Manual override for CDJ screen display in Act III (null = scroll-driven) */
   screenMode: "play" | "browse" | null;
-  /** Momentary visual button press impulse for Act III 500k-press demo (0..1) */
-  demoPlayPulse: number;
   /** Individual 8 Hot Cue pad trigger impulses (0..1 decaying) */
   hotCuePulses: Float32Array;
+  /** Rear cable plug-in sequence progress (0..1: Power -> PRO DJ LINK -> XLR -> Club Lights) */
+  cableIgnite: number;
+  /** Active connection animation timer (seconds, -1 when idle) */
+  cableIgniteTimer: number;
 }
 
 export interface Frame {
-  /** smoothed scroll position in px */
   scrollY: number;
   viewportH: number;
   /** 0..1 over the whole document */
@@ -49,19 +69,17 @@ export interface Frame {
   activeShot: string;
   /** 0..1 progress within the current shot segment */
   shotLocalT: number;
-  /** analysed / simulated audio */
-  levels: Float32Array; // ch1, ch2, ch3, ch4, masterL, masterR — 0..1 meter scale
+  /** visual 124 BPM meter levels (ch1..ch4, masterL, masterR) */
+  levels: Float32Array;
   bass: number;
   energy: number;
-  /** 0..1 pulse that decays after each kick */
+  /** 0..1 visual pulse decaying after each 124 BPM beat */
   kick: number;
   beat: number;
-  /** venue intensity driven by the performance (0..1) */
   release: number;
   controls: DeckControls;
   pointerX: number;
   pointerY: number;
-  /** true when an opaque DOM layer fully covers the canvas */
   canvasHidden: boolean;
 }
 
@@ -80,6 +98,9 @@ export const frame: Frame = {
   controls: {
     playing: false,
     cueHeld: false,
+    playHeld: false,
+    playTapImpulse: 0,
+    cueTapImpulse: 0,
     filter: -0.78,
     colorFx: "filter",
     centerLock: true,
@@ -87,11 +108,18 @@ export const frame: Frame = {
     crossfader: 0,
     beatFxHold: false,
     activeBeatFx: "Mobius",
-    jogFeel: 0.45,
+    beatFxDiv: "1",
+    xpadPos: 0.5,
+    fxFreq: { low: true, mid: true, hi: true },
+    jogMode: "idle",
+    jogTouchHeld: false,
     jogVelocity: 0,
+    jogScratchVel: 0,
+    jogPitchBend: 0,
     screenMode: null,
-    demoPlayPulse: 0,
     hotCuePulses: new Float32Array(8),
+    cableIgnite: 0,
+    cableIgniteTimer: -1,
   },
   pointerX: 0,
   pointerY: 0,
@@ -99,7 +127,6 @@ export const frame: Frame = {
 };
 
 export interface UIState {
-  sound: "off" | "on" | "unavailable";
   webgl: "pending" | "ready" | "unavailable";
   reducedMotion: boolean;
   playing: boolean;
@@ -107,12 +134,12 @@ export interface UIState {
   colorFx: ColorFxMode;
   centerLock: boolean;
   beatFxHold: boolean;
-  /** the visitor has released their track into the room */
   released: boolean;
   act: string;
   activeShot: string;
-  /** Last triggered Hot Cue pad index (0..7) for subtle UI feedback */
   lastHotCue: number | null;
+  jogMode: JogInteractionMode;
+  ignitionStage: "idle" | "power" | "link" | "xlr" | "club";
 }
 
 type Listener = () => void;
@@ -142,7 +169,6 @@ function createStore<T extends object>(initial: T) {
 }
 
 export const ui = createStore<UIState>({
-  sound: "off",
   webgl: "pending",
   reducedMotion: false,
   playing: false,
@@ -154,4 +180,6 @@ export const ui = createStore<UIState>({
   act: "hero",
   activeShot: "hero",
   lastHotCue: null,
+  jogMode: "idle",
+  ignitionStage: "idle",
 });

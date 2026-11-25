@@ -8,7 +8,7 @@ export function MomentAct() {
       {/* DJ's point of view rising across the lit booth into the venue */}
       <div className="moment-pov" data-shot="pov" data-shot-anchor="0" aria-hidden="true" />
 
-      {/* Full-bleed authentic underground club photography */}
+      {/* Full-bleed authentic underground club photography fading smoothly into the Finale */}
       <div className="moment-gallery">
         <div className="moment-hero-plate">
           <picture>
@@ -50,13 +50,6 @@ export function MomentAct() {
             </picture>
           </figure>
         </div>
-      </div>
-
-      {/* Deliberate moment of stillness after the climax */}
-      <div className="stillness" data-act="still" data-shot="still" data-shot-anchor="0">
-        <span className="stillness-rule" aria-hidden="true" />
-        <p className="stillness-time t-mono">{MOMENT.still}</p>
-        <span className="stillness-rule" aria-hidden="true" />
       </div>
     </section>
   );

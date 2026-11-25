@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { clamp, dbToUnit, gainToDb, smootherstep } from "@/lib/math";
-import { formatNightClock } from "@/scroll/director";
+import { formatScrollPercent } from "@/scroll/director";
 import { BOOTH, CDJ, DJM, pxToLocal } from "@/three/hardware/layout";
 import { cloneShot, DEFAULT_SHOT, fitToAspect, resolveShot, sampleShots, SHOTS } from "@/three/shots";
 
@@ -84,9 +84,10 @@ describe("Scroll-anchored cinematography", () => {
   });
 });
 
-describe("Night clock progression", () => {
-  test("starts at 23:52 and rolls cleanly past midnight to 05:47", () => {
-    expect(formatNightClock(0)).toBe("23:52");
-    expect(formatNightClock(1)).toBe("05:47");
+describe("Scroll progress indicator", () => {
+  test("maps scroll ratio 0..1 cleanly to 0..100%", () => {
+    expect(formatScrollPercent(0)).toBe(0);
+    expect(formatScrollPercent(0.5)).toBe(50);
+    expect(formatScrollPercent(1)).toBe(100);
   });
 });
