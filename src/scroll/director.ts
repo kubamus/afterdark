@@ -124,7 +124,7 @@ export function startDirector(
       });
       const st = ScrollTrigger.create({
         trigger: el,
-        start: "top 84%",
+        start: "top 92%",
         onEnter: () => tween.play(),
         onLeaveBack: () => tween.reverse(),
       });

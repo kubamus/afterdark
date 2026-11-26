@@ -101,7 +101,6 @@ function MacroFilm({
 export function CdjAct() {
   const { inspectShotId, setInspectShot } = useExperience();
   const [screenMode, setScreenMode] = useState<"browse" | "play">("browse");
-  const [pressCount, setPressCount] = useState(500000);
   const [playRippleKey, setPlayRippleKey] = useState(0);
   const [cueRippleKey, setCueRippleKey] = useState(0);
   const [activeXrayNode, setActiveXrayNode] = useState<"psu" | "dac">("psu");
@@ -149,7 +148,6 @@ export function CdjAct() {
     frame.controls.playing = next;
     frame.controls.playTapImpulse = 1;
     ui.set({ playing: next });
-    setPressCount((c) => c + 1);
     setPlayRippleKey((k) => k + 1);
     deckAudio.setPlaying(next);
   };
@@ -161,7 +159,6 @@ export function CdjAct() {
     frame.controls.cueHeld = true;
     frame.controls.cueTapImpulse = 1;
     ui.set({ playing: false, cueHeld: true });
-    setPressCount((c) => c + 1);
     setCueRippleKey((k) => k + 1);
     if (wasPlaying) {
       deckAudio.stopToCue();
@@ -248,8 +245,7 @@ export function CdjAct() {
             <h3 className="t-display showcase-h3">{screenFeat.title}</h3>
             <p className="t-body">{screenFeat.body}</p>
 
-            <div className="micro-widget" aria-label="Toggle live 3D CDJ-3000X display view">
-              <span className="micro-label">Live 3D screen</span>
+            <div className="control-strip" aria-label="Toggle live 3D CDJ-3000X display view">
               <div className="micro-seg-group">
                 <button
                   type="button"
@@ -294,44 +290,23 @@ export function CdjAct() {
             <h3 className="t-display showcase-h3">{jogFeat.title}</h3>
             <p className="t-body">{jogFeat.body}</p>
 
-            <div className="micro-widget" aria-label="Direct 3D dual-zone jog wheel interaction">
-              <div className="micro-row">
-                <span className="micro-label">Dual-zone capacitive jog</span>
-                <span
-                  className={`jog-state-pill${
-                    jogMode === "scratch"
-                      ? " jog-state-pill--scratch"
-                      : jogMode === "bend"
-                        ? " jog-state-pill--bend"
-                        : ""
-                  }`}
-                >
-                  {jogMode === "scratch"
-                    ? "Top platter scratch"
-                    : jogMode === "bend"
-                      ? "Outer rim pitch bend"
-                      : "Drag 3D jog"}
-                </span>
-              </div>
-
-              <div className="jog-zone-grid">
-                <button
-                  type="button"
-                  className={`jog-zone-card${jogMode === "scratch" ? " jog-zone-card--scratch" : ""}`}
-                  onClick={demoScratchTop}
-                >
-                  <strong>Top platter</strong>
-                  <span>Drag the center to brake and scratch.</span>
-                </button>
-                <button
-                  type="button"
-                  className={`jog-zone-card${jogMode === "bend" ? " jog-zone-card--bend" : ""}`}
-                  onClick={demoBendRim}
-                >
-                  <strong>Outer dimple rim</strong>
-                  <span>Drag the edge to bend pitch.</span>
-                </button>
-              </div>
+            <div className="control-strip control-strip--pair" aria-label="Test dual-zone jog wheel">
+              <button
+                type="button"
+                className={`jog-pill-btn${jogMode === "scratch" ? " jog-pill-btn--scratch" : ""}`}
+                onClick={demoScratchTop}
+              >
+                <span className="jog-pill-dot jog-pill-dot--scratch" aria-hidden="true" />
+                <span>Scratch top platter</span>
+              </button>
+              <button
+                type="button"
+                className={`jog-pill-btn${jogMode === "bend" ? " jog-pill-btn--bend" : ""}`}
+                onClick={demoBendRim}
+              >
+                <span className="jog-pill-dot jog-pill-dot--bend" aria-hidden="true" />
+                <span>Bend outer rim</span>
+              </button>
             </div>
 
             <div className="inline-specs">
@@ -350,62 +325,50 @@ export function CdjAct() {
             <h3 className="t-display showcase-h3">{playFeat.title}</h3>
             <p className="t-body">{playFeat.body}</p>
 
-            <div className="micro-widget">
-              <div className="micro-row">
-                <div className="micro-seg-group">
-                  <button
-                    type="button"
-                    className={`btn-tactile btn-tactile--cue t-mono${cueHeld ? " inspect-btn--active" : ""}`}
-                    aria-pressed={cueHeld}
-                    onPointerDown={(e) => {
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                      startCueHold();
-                    }}
-                    onPointerUp={endCueHold}
-                    onPointerCancel={endCueHold}
-                    onLostPointerCapture={endCueHold}
-                    onKeyDown={(e) => {
-                      if ((e.key === " " || e.key === "Enter") && !e.repeat) {
-                        e.preventDefault();
-                        startCueHold();
-                      }
-                    }}
-                    onKeyUp={(e) => {
-                      if (e.key === " " || e.key === "Enter") {
-                        e.preventDefault();
-                        endCueHold();
-                      }
-                    }}
-                    onBlur={endCueHold}
-                  >
-                    <span className="tactile-ring-wrap" aria-hidden="true">
-                      <span className="tactile-ring tactile-ring--amber" />
-                      {cueRippleKey > 0 && <span key={cueRippleKey} className="tactile-ripple tactile-ripple--amber" />}
-                    </span>
-                    <span>{playing ? "Return to CUE" : cueHeld ? "Playing CUE" : "Hold CUE"}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-tactile t-mono"
-                    aria-pressed={playing}
-                    onPointerDown={handlePlayPress}
-                  >
-                    <span className="tactile-ring-wrap" aria-hidden="true">
-                      <span className="tactile-ring" />
-                      {playRippleKey > 0 && <span key={playRippleKey} className="tactile-ripple" />}
-                    </span>
-                    <span>{playing ? "Pause" : "Press PLAY"}</span>
-                  </button>
-                </div>
-                <div className="t-mono" style={{ textAlign: "right" }}>
-                  <div className="press-counter-val">
-                    {pressCount.toLocaleString()}+
-                  </div>
-                  <div style={{ fontSize: "0.66rem", color: "var(--metallic)", letterSpacing: "0.08em" }}>
-                    Momentary presses
-                  </div>
-                </div>
-              </div>
+            <div className="control-strip control-strip--pair">
+              <button
+                type="button"
+                className={`btn-tactile btn-tactile--cue${cueHeld ? " btn-tactile--cue-active" : ""}`}
+                aria-pressed={cueHeld}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  startCueHold();
+                }}
+                onPointerUp={endCueHold}
+                onPointerCancel={endCueHold}
+                onLostPointerCapture={endCueHold}
+                onKeyDown={(e) => {
+                  if ((e.key === " " || e.key === "Enter") && !e.repeat) {
+                    e.preventDefault();
+                    startCueHold();
+                  }
+                }}
+                onKeyUp={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    endCueHold();
+                  }
+                }}
+                onBlur={endCueHold}
+              >
+                <span className="tactile-ring-wrap" aria-hidden="true">
+                  <span className="tactile-ring tactile-ring--amber" />
+                  {cueRippleKey > 0 && <span key={cueRippleKey} className="tactile-ripple tactile-ripple--amber" />}
+                </span>
+                <span>{playing ? "Return to CUE" : cueHeld ? "Playing CUE" : "Hold CUE"}</span>
+              </button>
+              <button
+                type="button"
+                className={`btn-tactile${playing ? " btn-tactile--play-active" : ""}`}
+                aria-pressed={playing}
+                onPointerDown={handlePlayPress}
+              >
+                <span className="tactile-ring-wrap" aria-hidden="true">
+                  <span className="tactile-ring" />
+                  {playRippleKey > 0 && <span key={playRippleKey} className="tactile-ripple" />}
+                </span>
+                <span>{playing ? "Pause" : "PLAY"}</span>
+              </button>
             </div>
 
             <div className="showcase-inset-film showcase-inset-film--compact">
@@ -688,12 +651,14 @@ export function DjmAct() {
             <h3 className="t-display showcase-h3">{colorFeat.title}</h3>
             <p className="t-body">{colorFeat.body}</p>
 
-            <div className="micro-widget">
-              <div className="micro-row">
-                <span className="micro-label">Center Lock detent</span>
+            <div className="centerlock-bar">
+              <div className="centerlock-row">
+                <span className="centerlock-name">Center Lock</span>
                 <button
                   type="button"
-                  className={`inspect-btn${centerLock ? " inspect-btn--active" : ""}`}
+                  role="switch"
+                  aria-checked={centerLock}
+                  className={`hw-switch${centerLock ? " hw-switch--on" : ""}`}
                   onClick={() => {
                     const next = !frame.controls.centerLock;
                     frame.controls.centerLock = next;
@@ -703,29 +668,13 @@ export function DjmAct() {
                       frame.controls.filter = 0;
                     }
                   }}
-                  aria-pressed={centerLock}
                 >
-                  {centerLock ? "Center Lock on" : "Center Lock off"}
+                  <span className="hw-switch-thumb" aria-hidden="true" />
                 </button>
               </div>
 
-              <div className="xpad-control-wrap" style={{ marginTop: "0.55rem" }}>
-                <div className="micro-row">
-                  <span className="micro-label" style={{ fontWeight: 500, color: "rgba(255,255,255,0.62)" }}>
-                    {centerLock ? "Turn knob, stops at center" : "Turn knob, free sweep from LOW to HI"}
-                  </span>
-                  <span style={{ fontSize: "0.74rem", fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.84)" }}>
-                    {colorManual
-                      ? colorSweepVal === 0
-                        ? "Center locked"
-                        : colorSweepVal < 0
-                          ? `LOW ${Math.round(Math.abs(colorSweepVal) * 100)}%`
-                          : `HI ${Math.round(colorSweepVal * 100)}%`
-                      : centerLock
-                        ? "Auto lock"
-                        : "Auto free"}
-                  </span>
-                </div>
+              <div className="centerlock-slider-row">
+                <span className="centerlock-end t-mono">LOW</span>
                 <input
                   type="range"
                   className="knob-range-input"
@@ -738,7 +687,7 @@ export function DjmAct() {
                   }}
                   onChange={(e) => {
                     let v = Number(e.target.value);
-                    // Authentic DJM-A9 Center Lock: fast sweep from LOW or HI hits a hard mechanical stop at 0 (12:00)!
+                    // Authentic DJM-A9 Center Lock: fast sweep from LOW or HI hits a hard mechanical stop at 0 (center)
                     if (centerLock) {
                       if (colorSweepSideRef.current === -1 && v > 0) v = 0;
                       if (colorSweepSideRef.current === 1 && v < 0) v = 0;
@@ -749,6 +698,7 @@ export function DjmAct() {
                   }}
                   aria-label="Sweep DJM-A9 Sound Color FX knob"
                 />
+                <span className="centerlock-end t-mono">HI</span>
               </div>
             </div>
 
@@ -795,7 +745,7 @@ export function DjmAct() {
             <div className="micro-widget beatfx-live-card">
               <div className="micro-row">
                 <span className="micro-label" style={{ color: "rgba(255, 255, 255, 0.92)" }}>
-                  {selectedFx} live display
+                  {selectedFx}
                 </span>
                 <div className="micro-seg-group">
                   {(["low", "mid", "hi"] as const).map((band) => (

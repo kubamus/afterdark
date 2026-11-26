@@ -11,6 +11,8 @@ import {
   buildSeparatedRoundKeycap,
   createFlutedKnobBarrelGeo,
   createPanelMaterial,
+  createSeamlessKnobPointerGeo,
+  createSpunMetalCapTexture,
   local,
   rectToUV,
   type PanelUniforms,
@@ -227,39 +229,51 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
   group.add(physicalKnobs);
 
   // =========================================================================
-  // SCULPTED 14-FLUTE SOUND COLOR FX KNOBS (Authentic brushed gunmetal + silver collar!)
+  // SCULPTED 16-FLUTE MACHINED ALUMINUM SOUND COLOR FX KNOBS (Matches `djm-color.webp`)
+  // Compact footprint leaves the printed LOW—LOCK—HI faceplate arc 100% clear!
   // =========================================================================
   const colorKnobs: THREE.Group[] = [];
+  const spunCapTex = createSpunMetalCapTexture();
   const colorBarrelMat = new THREE.MeshPhysicalMaterial({
-    color: 0x2c303a,
-    roughness: 0.34,
-    metalness: 0.74,
-    clearcoat: 0.28,
-    clearcoatRoughness: 0.24,
-    normalMap: shared.maps.rubberNormal,
-    normalScale: new THREE.Vector2(0.18, 0.18),
+    color: 0x262932,
+    roughness: 0.32,
+    metalness: 0.84,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.26,
+  });
+  const colorBevelMat = new THREE.MeshStandardMaterial({
+    color: 0x8e95a4,
+    roughness: 0.22,
+    metalness: 0.94,
   });
   const colorCrownMat = new THREE.MeshPhysicalMaterial({
-    color: 0x3b3f4b,
-    roughness: 0.3,
-    metalness: 0.86,
-    clearcoat: 0.34,
-    clearcoatRoughness: 0.18,
+    color: 0xffffff,
+    map: spunCapTex,
+    roughness: 0.26,
+    metalness: 0.88,
+    clearcoat: 0.26,
+    clearcoatRoughness: 0.22,
     normalMap: shared.maps.radialNormal,
-    normalScale: new THREE.Vector2(0.32, 0.32),
+    normalScale: new THREE.Vector2(0.24, 0.24),
     roughnessMap: shared.maps.radialRoughness,
+  });
+  const colorSeatMat = new THREE.MeshStandardMaterial({
+    color: 0x0b0c0f,
+    roughness: 0.8,
+    metalness: 0.2,
   });
   const aoDiscMat = shared.maps.contactAo
     ? new THREE.MeshBasicMaterial({
         map: shared.maps.contactAo,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.78,
         depthWrite: false,
         polygonOffset: true,
         polygonOffsetFactor: -2,
       })
     : null;
-  disposables.push(colorBarrelMat, colorCrownMat);
+  disposables.push(colorBarrelMat, colorBevelMat, colorCrownMat, colorSeatMat);
+  if (spunCapTex) disposables.push(spunCapTex);
   if (aoDiscMat) disposables.push(aoDiscMat);
 
   const initialColorAngles = [-0.25, 0, 0.18, 0];
@@ -267,13 +281,15 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     const ck = dev.color[i]!;
     const [kx, kz] = local(dev, ck.at[0], ck.at[1]);
     const r = ck.r / dev.pxPerM;
-    const h = ck.h * 1.18;
+    const h = ck.h * 0.86;
+    const rTop = r * 0.76;
+    const rBot = r * 0.89;
 
     if (aoDiscMat) {
-      const aoGeo = new THREE.PlaneGeometry(r * 2.75, r * 2.75);
+      const aoGeo = new THREE.PlaneGeometry(r * 2.2, r * 2.2);
       aoGeo.rotateX(-Math.PI / 2);
       const ao = new THREE.Mesh(aoGeo, aoDiscMat);
-      ao.position.set(kx, TOP_Y + 0.00145, kz);
+      ao.position.set(kx, TOP_Y + 0.0014, kz);
       group.add(ao);
       disposables.push(aoGeo);
     }
@@ -283,41 +299,41 @@ export function buildDjm(tex: DjmTextures, shared: CdjSharedMaterials): DjmRig {
     pivot.rotation.y = initialColorAngles[i] ?? 0;
     pivot.name = ck.id;
 
-    // High-detail 14-flute brushed-gunmetal Sound Color FX grip barrel
-    const barrelGeo = createFlutedKnobBarrelGeo(r * 0.8, r * 0.96, h, 14, 0.072, 84);
+    // Subtle dark base seat (NO bulky silver washer covering the printed faceplate arc!)
+    const seatGeo = new THREE.CylinderGeometry(rBot * 0.96, rBot * 1.0, h * 0.07, 48);
+    const seat = new THREE.Mesh(seatGeo, colorSeatMat);
+    seat.position.y = h * 0.035;
+    pivot.add(seat);
+
+    // High-resolution 16-flute machined dark-anodized aluminum grip barrel
+    const barrelGeo = createFlutedKnobBarrelGeo(rTop, rBot, h, 16, 0.105, 128);
     const barrel = new THREE.Mesh(barrelGeo, colorBarrelMat);
     barrel.position.y = h / 2;
     barrel.castShadow = true;
     barrel.receiveShadow = true;
     pivot.add(barrel);
 
-    // Flared brushed-aluminum base skirt collar
-    const baseRingGeo = new THREE.CylinderGeometry(r * 0.96, r * 1.09, h * 0.15, 56);
-    const baseRing = new THREE.Mesh(baseRingGeo, shared.silver);
-    baseRing.position.y = h * 0.075;
-    pivot.add(baseRing);
+    // Razor diamond-cut metallic rim ring right around the top bevel (like djm-color.webp!)
+    const bevelRingGeo = new THREE.TorusGeometry(rTop * 0.89, 0.00042, 12, 64);
+    bevelRingGeo.rotateX(Math.PI / 2);
+    const bevelRing = new THREE.Mesh(bevelRingGeo, colorBevelMat);
+    bevelRing.position.y = h * 0.965;
+    pivot.add(bevelRing);
 
-    // Flush spun-metal radial crown disc
-    const crownCapGeo = new THREE.CylinderGeometry(r * 0.69, r * 0.76, 0.0009, 56);
+    // Anisotropic conical spun-metal top cap
+    const crownCapGeo = new THREE.CylinderGeometry(rTop * 0.84, rTop * 0.86, 0.0006, 64);
     const crownCap = new THREE.Mesh(crownCapGeo, colorCrownMat);
-    crownCap.position.y = h * 0.985;
+    crownCap.position.y = h * 0.992;
     pivot.add(crownCap);
 
-    // Sleek flush-inlaid rounded white indicator line
-    const topFinGeo = new RoundedBoxGeometry(0.0015, 0.00075, r * 0.65, 2, 0.0003);
-    const topFin = new THREE.Mesh(topFinGeo, pointerMat);
-    topFin.position.set(0, h * 1.001, -r * 0.36);
-    pivot.add(topFin);
-
-    const frontFinGeo = new RoundedBoxGeometry(0.0015, h * 0.42, 0.0009, 2, 0.0003);
-    const frontFin = new THREE.Mesh(frontFinGeo, pointerMat);
-    frontFin.position.set(0, h * 0.72, -r * 0.77);
-    frontFin.rotation.x = -0.2;
-    pivot.add(frontFin);
+    // Single seamless rounded white indicator inlaid flush over the front shoulder
+    const pointerGeo = createSeamlessKnobPointerGeo(rTop, rBot, h, 0.00135);
+    const pointer = new THREE.Mesh(pointerGeo, pointerMat);
+    pivot.add(pointer);
 
     group.add(pivot);
     colorKnobs.push(pivot);
-    disposables.push(barrelGeo, baseRingGeo, crownCapGeo, topFinGeo, frontFinGeo);
+    disposables.push(seatGeo, barrelGeo, bevelRingGeo, crownCapGeo, pointerGeo);
   }
 
   // =========================================================================

@@ -102,6 +102,18 @@ export function buildVenue(
   group.add(table);
   disposables.push(tableGeo, tableMat);
 
+  // Solid matte-obsidian DJ booth pedestal below the tabletop (grounds tall portrait POV views so club beams never bleed under a floating shelf!)
+  const plinthGeo = new THREE.BoxGeometry(1.52, 1.1, 0.72);
+  const plinthMat = new THREE.MeshStandardMaterial({
+    color: 0x060608,
+    roughness: 0.9,
+    metalness: 0.08,
+  });
+  const plinth = new THREE.Mesh(plinthGeo, plinthMat);
+  plinth.position.set(0, BOOTH.tableY - 0.081 - 0.55, -0.04);
+  group.add(plinth);
+  disposables.push(plinthGeo, plinthMat);
+
   // Subtle recessed brushed-dark rear cable channel strip along the back of the booth tabletop
   const channelGeo = new THREE.BoxGeometry(1.26, 0.004, 0.042);
   const channelMat = new THREE.MeshStandardMaterial({
@@ -380,11 +392,11 @@ export function buildVenue(
 
   // Two dark steel trusses:
   //  - z = -3.2, y = 1.68 (framed cleanly in the upper club ceiling from DJ POV!)
-  //  - z = +2.4, y = 1.18 (framed cleanly in the upper dark room from rear Signal Bridge!)
+  //  - z = +3.8, y = 1.68 (behind any portrait camera dolly on Final, still framed cleanly in Signal Bridge!)
   const frontTruss = new THREE.Mesh(trussBarGeo, trussMat);
   frontTruss.position.set(0, 1.68, -3.2);
   const rearTruss = new THREE.Mesh(trussBarGeo, trussMat);
-  rearTruss.position.set(0, 1.18, 2.4);
+  rearTruss.position.set(0, 1.68, 3.8);
   clubRigGroup.add(frontTruss, rearTruss);
 
   const beamVert = `
@@ -446,11 +458,11 @@ export function buildVenue(
     { pos: [2.15, 1.65, -3.2], rot: [0.22, 0, 0.36], color: 0xe02836, rTop: 0.026, rBot: 0.58, len: 4.5, phase: 0.8, opacity: 0.24 },
 
     // Rear-wall club moving heads (visible directly behind the booth in Signal Bridge once XLR connects!)
-    { pos: [-1.55, 1.15, 2.4], rot: [-0.22, 0, -0.34], color: 0xe02836, rTop: 0.026, rBot: 0.56, len: 3.8, phase: 0.3, opacity: 0.25 },
-    { pos: [-0.72, 1.15, 2.4], rot: [-0.15, 0, 0.18], color: 0xf8d4a6, rTop: 0.022, rBot: 0.42, len: 3.9, phase: 1.8, opacity: 0.18 },
-    { pos: [0.0, 1.15, 2.4], rot: [-0.12, 0, -0.06], color: 0xdce6ff, rTop: 0.02, rBot: 0.36, len: 3.8, phase: 3.1, opacity: 0.15 },
-    { pos: [0.72, 1.15, 2.4], rot: [-0.15, 0, -0.18], color: 0xf8d4a6, rTop: 0.022, rBot: 0.42, len: 3.9, phase: 4.3, opacity: 0.18 },
-    { pos: [1.55, 1.15, 2.4], rot: [-0.22, 0, 0.34], color: 0xe02836, rTop: 0.026, rBot: 0.56, len: 3.8, phase: 5.4, opacity: 0.25 },
+    { pos: [-1.85, 1.65, 3.8], rot: [-0.22, 0, -0.34], color: 0xe02836, rTop: 0.028, rBot: 0.62, len: 4.8, phase: 0.3, opacity: 0.26 },
+    { pos: [-0.88, 1.65, 3.8], rot: [-0.15, 0, 0.18], color: 0xf8d4a6, rTop: 0.024, rBot: 0.48, len: 4.9, phase: 1.8, opacity: 0.19 },
+    { pos: [0.0, 1.65, 3.8], rot: [-0.12, 0, -0.06], color: 0xdce6ff, rTop: 0.022, rBot: 0.42, len: 4.8, phase: 3.1, opacity: 0.16 },
+    { pos: [0.88, 1.65, 3.8], rot: [-0.15, 0, -0.18], color: 0xf8d4a6, rTop: 0.024, rBot: 0.48, len: 4.9, phase: 4.3, opacity: 0.19 },
+    { pos: [1.85, 1.65, 3.8], rot: [-0.22, 0, 0.34], color: 0xe02836, rTop: 0.028, rBot: 0.62, len: 4.8, phase: 5.4, opacity: 0.26 },
   ];
 
   for (const cfg of headConfigs) {

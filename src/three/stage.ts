@@ -139,7 +139,14 @@ export function createStage(canvas: HTMLCanvasElement): StageController | null {
     const dpr = Math.min(window.devicePixelRatio || 1, isSmall ? 1.5 : 2);
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(1, h);
+    const aspect = w / Math.max(1, h);
+    camera.aspect = aspect;
+    // On portrait phones, lift the 3D hardware cleanly into the upper half of the viewport so bottom editorial content never collides with it
+    if (aspect < 0.85) {
+      camera.setViewOffset(w, h, 0, Math.round(h * 0.145), w, h);
+    } else {
+      camera.clearViewOffset();
+    }
     camera.updateProjectionMatrix();
   };
   resize();

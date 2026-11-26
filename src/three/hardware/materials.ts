@@ -611,29 +611,123 @@ export function buildSeparatedRoundKeycap(
 }
 
 /**
- * Builds a high-detail sculpted 3D rotary knob barrel matching official Pioneer DJM-A9 knobs (`djm-eq.webp`):
- *  - Stepped satin-elastomer grip skirt with crisp 14-rib tactile finger flutes
- *  - Smooth chamfered top shoulder & gently recessed satin crown
+ * Builds a procedural anisotropic spun-metal top cap texture (conical brushed aluminum
+ * sunburst highlight matching the real Pioneer DJ DJM-A9 Sound Color FX knobs in `djm-color.webp`).
+ */
+export function createSpunMetalCapTexture(): THREE.CanvasTexture | null {
+  if (typeof document === "undefined") return null;
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+  const half = size * 0.5;
+  for (let y = 0; y < size; y++) {
+    const dy = (y + 0.5 - half) / half;
+    for (let x = 0; x < size; x++) {
+      const dx = (x + 0.5 - half) / half;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      const ang = Math.atan2(dy, dx);
+      // Anisotropic conical starburst reflection + subtle fine lathe rings
+      const lobe = Math.pow(Math.abs(Math.cos(ang * 2 - 0.72)), 2.2);
+      const rings = Math.sin(r * 92) * 5.5 + Math.sin(r * 184) * 2.5;
+      const rimBright = r > 0.8 ? (r - 0.8) * 120 : 0;
+      const v = Math.max(24, Math.min(205, Math.round(48 + lobe * 78 + rings + rimBright)));
+      const idx = (y * size + x) * 4;
+      data[idx] = Math.round(v * 0.98);
+      data[idx + 1] = Math.round(v * 0.99);
+      data[idx + 2] = Math.min(255, Math.round(v * 1.04));
+      data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/**
+ * Builds a single seamless curved pointer inlay for rotary knobs (flush top strip curving
+ * cleanly over the chamfered shoulder and down the front wall — zero two-piece gap or overhang!).
+ */
+export function createSeamlessKnobPointerGeo(
+  rTop: number,
+  _rBot: number,
+  height: number,
+  width: number,
+): THREE.BufferGeometry {
+  const s = new THREE.Shape();
+  const topY = height + 0.00024;
+  const bevelY = height * 0.945;
+  const sideY = height * 0.84;
+  const t = 0.0005;
+
+  // Flush top indicator bar running from center cleanly to the chamfered shoulder (never protruding past flutes!)
+  s.moveTo(0, topY - t);
+  s.lineTo(0, topY);
+  s.lineTo(rTop * 0.82, topY);
+  s.quadraticCurveTo(rTop * 0.94, topY, rTop * 0.955, bevelY);
+  s.lineTo(rTop * 0.985, sideY);
+  s.lineTo(rTop * 0.92, sideY);
+  s.lineTo(rTop * 0.89, bevelY);
+  s.lineTo(rTop * 0.8, topY - t);
+  s.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(s, {
+    depth: width,
+    bevelEnabled: true,
+    bevelThickness: Math.min(0.00018, width * 0.16),
+    bevelSize: Math.min(0.00014, width * 0.14),
+    bevelSegments: 2,
+    curveSegments: 8,
+  });
+  // Center along X, orient radial +x of 2D profile toward -Z (12 o'clock pointer direction)
+  geo.translate(0, 0, -width / 2);
+  geo.rotateY(Math.PI / 2);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Builds a high-resolution machined/molded 3D rotary knob barrel matching official Pioneer DJM-A9
+ * hardware (`djm-color.webp` & `djm-eq.webp`):
+ *  - 24-slice parametric wall with crisp scalloped concave finger flutes running full height
+ *  - Sharp chamfered top shoulder & gently recessed flat crown
  */
 export function createFlutedKnobBarrelGeo(
   rTop: number,
   rBot: number,
   height: number,
   flutes = 14,
-  fluteDepth = 0.064,
-  radialSegs = 96,
+  fluteDepth = 0.085,
+  radialSegs = 128,
 ): THREE.BufferGeometry {
-  const pts: THREE.Vector2[] = [
-    new THREE.Vector2(rBot * 0.96, height * 0.1),
-    new THREE.Vector2(rBot * 0.96, height * 0.18),
-    new THREE.Vector2(rBot * 0.93, height * 0.42),
-    new THREE.Vector2((rBot + rTop) * 0.46, height * 0.72),
-    new THREE.Vector2(rTop * 1.0, height * 0.89),
-    new THREE.Vector2(rTop * 0.94, height * 0.96),
-    new THREE.Vector2(rTop * 0.84, height * 0.995),
-    new THREE.Vector2(rTop * 0.35, height * 0.988),
-    new THREE.Vector2(0.0001, height * 0.982),
-  ];
+  const pts: THREE.Vector2[] = [];
+  // Bottom recessed undercut seating cleanly on the aluminum faceplate
+  pts.push(new THREE.Vector2(rBot * 0.92, 0));
+  pts.push(new THREE.Vector2(rBot * 1.0, height * 0.04));
+
+  // 16 smooth vertical slices along the fluted conical grip wall
+  const wallSteps = 16;
+  for (let i = 0; i <= wallSteps; i++) {
+    const t = i / wallSteps;
+    const y = height * (0.04 + t * 0.84);
+    // Subtle ergonomic inward taper from base to shoulder
+    const r = rBot + (rTop - rBot) * Math.pow(t, 0.95);
+    pts.push(new THREE.Vector2(r, y));
+  }
+
+  // Crisp chamfered top shoulder & flat crown
+  pts.push(new THREE.Vector2(rTop * 0.93, height * 0.95));
+  pts.push(new THREE.Vector2(rTop * 0.84, height * 0.992));
+  pts.push(new THREE.Vector2(rTop * 0.42, height * 0.996));
+  pts.push(new THREE.Vector2(0.0001, height * 0.996));
+
   const geo = new THREE.LatheGeometry(pts, radialSegs);
   geo.translate(0, -height / 2, 0);
 
@@ -645,13 +739,16 @@ export function createFlutedKnobBarrelGeo(
     const r = Math.sqrt(x * x + z * z);
     if (r < 0.0003) continue;
     const ny = (y + height / 2) / height;
-    if (ny > 0.14 && ny < 0.9) {
-      const t = (ny - 0.14) / 0.76;
-      const fluteMask = Math.sin(t * Math.PI);
+    if (ny > 0.035 && ny < 0.91) {
+      // Crisp full-height concave scalloped flutes (taper smoothly only at very top chamfer & bottom edge)
+      const botFade = Math.min(1, (ny - 0.035) / 0.06);
+      const topFade = Math.min(1, (0.91 - ny) / 0.075);
+      const fluteMask = botFade * topFade;
       const ang = Math.atan2(z, x);
-      // Pronounced rounded Pioneer DJ finger-grip ribs that catch real directional rim highlights!
-      const ridge = Math.pow(0.5 + 0.5 * Math.cos(ang * flutes), 1.35);
-      const rScale = 1 - fluteDepth * fluteMask * (1 - ridge);
+      // Real scalloped flute profile: crisp narrow ridges separated by smooth concave finger valleys!
+      const c = 0.5 + 0.5 * Math.cos(ang * flutes);
+      const scallop = Math.pow(c, 0.65);
+      const rScale = 1 - fluteDepth * fluteMask * (1 - scallop);
       pos.setXYZ(i, x * rScale, y, z * rScale);
     }
   }
@@ -779,12 +876,11 @@ export function buildPanelScrews(
 }
 
 /**
- * Builds photorealistic Pioneer DJM-A9 rotary potentiometers matching official `djm-eq.webp`:
- *  - Grounded contact ambient occlusion disc
- *  - Signature machined brushed-aluminum flared lower skirt collar (catches crisp studio highlights!)
- *  - Satin charcoal-graphite 14-rib elastomer grip barrel (NOT flat void black!)
- *  - Distinct satin graphite recessed crown cap
- *  - Thin, flush inlaid warm-white indicator stripe wrapping cleanly over the front shoulder
+ * Builds authentic Pioneer DJM-A9 matte rubberized P-LOCK rotary potentiometers (`djm-eq.webp`):
+ *  - Compact squat proportions keeping the printed faceplate scale arc 100% visible around the base
+ *  - Dark matte soft-touch elastomer 12-flute body (no chunky plastic/silver collar ring!)
+ *  - Subtle chamfered matte-graphite top cap
+ *  - Single seamless curved white pointer inlay flush across the top and front shoulder
  */
 export function buildPhysicalKnobs(
   dev: DeviceFrame,
@@ -804,58 +900,54 @@ export function buildPhysicalKnobs(
     ? new THREE.MeshBasicMaterial({
         map: mats.aoTex,
         transparent: true,
-        opacity: 0.86,
+        opacity: 0.78,
         depthWrite: false,
         polygonOffset: true,
         polygonOffsetFactor: -2,
       })
     : null;
 
-  // Authentic charcoal-graphite soft-touch elastomer grip + slightly lighter satin graphite top cap
-  const gripElastomerMat = new THREE.MeshPhysicalMaterial({
-    color: 0x262830,
-    roughness: 0.5,
-    metalness: 0.18,
-    clearcoat: 0.16,
-    clearcoatRoughness: 0.44,
+  // Authentic Pioneer DJ matte rubberized P-LOCK elastomer body + slightly lighter satin-matte cap
+  const gripElastomerMat = new THREE.MeshStandardMaterial({
+    color: 0x1b1d22,
+    roughness: 0.78,
+    metalness: 0.08,
     normalMap: (mats.barrel as THREE.MeshStandardMaterial).normalMap ?? null,
-    normalScale: new THREE.Vector2(0.28, 0.28),
+    normalScale: new THREE.Vector2(0.24, 0.24),
   });
-  const knobCapMat = new THREE.MeshPhysicalMaterial({
-    color: 0x32353f,
-    roughness: 0.36,
-    metalness: 0.34,
-    clearcoat: 0.24,
-    clearcoatRoughness: 0.3,
+  const knobCapMat = new THREE.MeshStandardMaterial({
+    color: 0x262930,
+    roughness: 0.58,
+    metalness: 0.16,
   });
-  const skirtSilverMat = new THREE.MeshStandardMaterial({
-    color: 0xb6bcc8,
-    roughness: 0.24,
-    metalness: 0.9,
+  const baseSeatMat = new THREE.MeshStandardMaterial({
+    color: 0x0b0c0f,
+    roughness: 0.82,
+    metalness: 0.18,
   });
   const inlayPointerMat = new THREE.MeshStandardMaterial({
-    color: 0xeeece6,
-    roughness: 0.42,
-    metalness: 0.04,
+    color: 0xf0efe9,
+    roughness: 0.4,
+    metalness: 0.02,
   });
 
-  // High-resolution sculpted 14-rib grip barrel + flared brushed-aluminum base skirt (like djm-eq.webp!)
-  const unitBarrel = createFlutedKnobBarrelGeo(0.79, 0.96, 1.0, 14, 0.068, 84);
-  const unitBaseCollar = new THREE.CylinderGeometry(0.95, 1.09, 0.15, 56);
-  const unitCrownDisc = new THREE.CylinderGeometry(0.68, 0.75, 0.04, 56);
+  // Squat 12-flute scalloped elastomer barrel seated cleanly inside the printed faceplate scale arc
+  const unitBarrel = createFlutedKnobBarrelGeo(0.72, 0.87, 1.0, 12, 0.078, 96);
+  const unitBaseSeat = new THREE.CylinderGeometry(0.86, 0.9, 0.08, 48);
+  const unitCrownDisc = new THREE.CylinderGeometry(0.62, 0.68, 0.025, 48);
   const unitAo = new THREE.PlaneGeometry(1, 1);
   unitAo.rotateX(-Math.PI / 2);
 
   for (const k of specs) {
     const [x, z] = local(dev, k.at[0], k.at[1]);
     const r = k.r / dev.pxPerM;
-    const h = k.h * 1.08;
+    const h = k.h * 0.9;
     const angle = k.angle ?? 0;
 
     if (aoMat) {
       const ao = new THREE.Mesh(unitAo, aoMat);
-      ao.scale.set(r * 2.7, 1, r * 2.7);
-      ao.position.set(x, panelY + 0.00145, z);
+      ao.scale.set(r * 2.25, 1, r * 2.25);
+      ao.position.set(x, panelY + 0.0014, z);
       root.add(ao);
     }
 
@@ -864,15 +956,13 @@ export function buildPhysicalKnobs(
     pivot.rotation.y = angle;
     pivot.name = k.id;
 
-    // Signature machined brushed-aluminum flared base collar
-    const collar = new THREE.Mesh(unitBaseCollar, skirtSilverMat);
-    collar.scale.set(r, h, r);
-    collar.position.y = h * 0.075;
-    collar.castShadow = true;
-    collar.receiveShadow = true;
-    pivot.add(collar);
+    // Subtle dark recessed shaft seat (leaves the printed faceplate scale arc 100% visible!)
+    const seat = new THREE.Mesh(unitBaseSeat, baseSeatMat);
+    seat.scale.set(r, h, r);
+    seat.position.y = h * 0.04;
+    pivot.add(seat);
 
-    // Sculpted 14-rib charcoal elastomer barrel
+    // Sculpted 12-flute matte rubberized barrel
     const barrel = new THREE.Mesh(unitBarrel, gripElastomerMat);
     barrel.scale.set(r, h, r);
     barrel.position.y = h / 2;
@@ -880,24 +970,17 @@ export function buildPhysicalKnobs(
     barrel.receiveShadow = true;
     pivot.add(barrel);
 
-    // Distinct satin graphite top cap
+    // Subtle satin-matte top cap
     const cap = new THREE.Mesh(unitCrownDisc, knobCapMat);
     cap.scale.set(r, h, r);
-    cap.position.y = h * 0.984;
+    cap.position.y = h * 0.99;
     pivot.add(cap);
 
-    // Flush-inlaid warm off-white indicator line (top + cleanly seated front groove)
-    const finW = Math.max(0.00105, r * 0.11);
-    const topFinGeo = new RoundedBoxGeometry(finW, 0.00065, r * 0.66, 2, 0.00025);
-    const topFin = new THREE.Mesh(topFinGeo, inlayPointerMat);
-    topFin.position.set(0, h * 1.001, -r * 0.36);
-    pivot.add(topFin);
-
-    const sideFinGeo = new RoundedBoxGeometry(finW, h * 0.42, 0.0008, 2, 0.00025);
-    const sideFin = new THREE.Mesh(sideFinGeo, inlayPointerMat);
-    sideFin.position.set(0, h * 0.72, -r * 0.77);
-    sideFin.rotation.x = -0.2;
-    pivot.add(sideFin);
+    // Single seamless flush-inlaid white pointer curve (zero gap or overhang!)
+    const finW = Math.max(0.00088, r * 0.095);
+    const pointerGeo = createSeamlessKnobPointerGeo(r * 0.72, r * 0.87, h, finW);
+    const pointer = new THREE.Mesh(pointerGeo, inlayPointerMat);
+    pivot.add(pointer);
 
     root.add(pivot);
   }

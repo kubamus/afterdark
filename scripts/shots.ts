@@ -122,7 +122,7 @@ async function captureMobileAndLarge() {
   await lgPage.screenshot({ path: `${OUT}/17-hero-1920.png` });
   await lgCtx.close();
 
-  // Mobile 390x844
+  // Mobile 390x844 — comprehensive audit across hero, menu drawer, CDJ, Signal, DJM, POV, Final, Specs
   const mobCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const mobPage = await mobCtx.newPage();
   await mobPage.goto(URL, { waitUntil: "networkidle" });
@@ -131,17 +131,32 @@ async function captureMobileAndLarge() {
   if (mobOverflow) report.overflows.push("390x844");
   await mobPage.screenshot({ path: `${OUT}/18-hero-mobile.png` });
 
+  // Capture open mobile navigation drawer
+  await mobPage.getByRole("button", { name: "Open menu" }).click();
+  await mobPage.waitForTimeout(250);
+  await mobPage.screenshot({ path: `${OUT}/18b-menu-mobile.png` });
+  await mobPage.getByRole("button", { name: "Close menu" }).click();
+  await mobPage.waitForTimeout(200);
+
   for (const [sel, file] of [
     ['[data-shot="overhead"]', "19-overhead-mobile.png"],
+    ['[data-shot="cdj-intro"]', "19b-cdj-intro-mobile.png"],
     ['[data-shot="cdj-screen"]', "20-cdj-mobile.png"],
+    ['[data-shot="cdj-jog"]', "20b-jog-mobile.png"],
+    ['[data-shot="cdj-playcue"]', "20c-playcue-mobile.png"],
+    ['[data-shot="cdj-sound"]', "20d-sound-mobile.png"],
+    ['[data-shot="signal"]', "20e-signal-mobile.png"],
+    ['[data-shot="djm-color"]', "20f-djm-color-mobile.png"],
+    ['[data-shot="djm-beatfx"]', "20g-djm-beatfx-mobile.png"],
     ['[data-shot="pov"]', "21-pov-mobile.png"],
     [".final-hero", "22-final-mobile.png"],
+    ["#specs", "22b-specs-mobile.png"],
   ] as const) {
     await mobPage.evaluate((s) => {
       const el = document.querySelector<HTMLElement>(s);
       if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY, behavior: "instant" });
     }, sel);
-    await mobPage.waitForTimeout(900);
+    await mobPage.waitForTimeout(sel.includes("signal") ? 3300 : 950);
     await mobPage.screenshot({ path: `${OUT}/${file}` });
   }
   await mobCtx.close();
